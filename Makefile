@@ -19,6 +19,7 @@ agent-src: protocol-src bpfmap-src ubpf-src
 
 switch: agent-src
 	cd softswitch && $(MAKE)
+	cd inputqueuedswitch && $(MAKE)
 
 dpdkswitch-src: agent-src
 	cd dpdkswitch && $(MAKE)
@@ -32,6 +33,7 @@ clean:
 	cd agent && $(MAKE) clean
 	cd protocol && $(MAKE) clean
 	cd softswitch && $(MAKE) clean
+	cd inputqueuedswitch && $(MAKE) clean
 	cd examples && $(MAKE) clean
 ifdef RTE_SDK
   cd dpdkswitch && $(MAKE) clean

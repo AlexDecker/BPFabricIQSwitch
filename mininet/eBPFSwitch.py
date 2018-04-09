@@ -21,7 +21,7 @@ class eBPFHost(Host):
 class eBPFSwitch(Switch):
     dpid = 1
 
-    def __init__(self, name, switch_path='softswitch', dpid=None, **kwargs):
+    def __init__(self, name, switch_path='inputqueuedswitch', dpid=None, **kwargs):
         Switch.__init__(self, name, **kwargs)
 
         self.switch_path = switch_path
