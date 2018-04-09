@@ -1,52 +1,28 @@
-# Prerequisites
-*.d
-
-# Object files
+*.pyc
 *.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
+*.o.d
+*.o.cmd
 *.a
-*.la
-*.lo
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+softswitch/softswitch
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+protocol/src/c
+protocol/src/python
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+dpdkswitch/build
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+examples/*.bin
+examples/*.asm
+
+bpfmap/test_arraymap
+bpfmap/test_bpfmap
+bpfmap/test_hashmap
+
+
+# OpenWRT package files
+ipkg-*
+.built
+.configured_yyyyyyyy
+.prepared
+.quilt_checked
+.source_dir
