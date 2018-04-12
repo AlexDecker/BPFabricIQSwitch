@@ -1,5 +1,9 @@
 #include "softswitch.h"
 
+static inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr){
+    return !(hdr->tp_status & (TP_STATUS_SEND_REQUEST | TP_STATUS_SENDING));}
+
+
 //configura o ring e o mapeamento PACKET_MMAP
 int setup_ring(int fd, struct ring* ring, int ring_type)
 {

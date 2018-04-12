@@ -78,17 +78,6 @@ int setup_socket(struct port *port, char *netdev);
 //liberação do mapeamento e das estruturas
 void teardown_socket(struct port *port);
 
-extern inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
-    return ((hdr->tp_status & TP_STATUS_USER) == TP_STATUS_USER);}
-extern inline void v2_rx_user_ready(struct tpacket2_hdr *hdr){
-    hdr->tp_status = TP_STATUS_KERNEL;
-    __sync_synchronize();}
-extern inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr){
-    return !(hdr->tp_status & (TP_STATUS_SEND_REQUEST | TP_STATUS_SENDING));}
-extern inline void v2_tx_user_ready(struct tpacket2_hdr *hdr){
-    hdr->tp_status = TP_STATUS_SEND_REQUEST;
-    __sync_synchronize();}
-
 //envia um frame pela porta de saída correta
 int tx_frame(struct port* port, void *data, int len);
 

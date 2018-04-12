@@ -96,6 +96,12 @@ void sighandler(int num)
     sigint = 1;
 }
 
+static inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
+    return ((hdr->tp_status & TP_STATUS_USER) == TP_STATUS_USER);}
+static inline void v2_rx_user_ready(struct tpacket2_hdr *hdr){
+    hdr->tp_status = TP_STATUS_KERNEL;
+    __sync_synchronize();}
+
 int main(int argc, char **argv)
 {
 	sigint = 0;//agora é extern, então a definição no ato de declaração
