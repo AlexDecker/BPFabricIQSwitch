@@ -1,6 +1,6 @@
 #include "softswitch.h"
 
-static void sighandler(int num)
+void sighandler(int num)
 {
     sigint = 1;
 }
@@ -36,7 +36,7 @@ static int setup_ring(int fd, struct ring* ring, int ring_type)
 
 
 //abre e configura um socket para cada par de portas de entrada/saída
-static int setup_socket(struct port *port, char *netdev)
+int setup_socket(struct port *port, char *netdev)
 {
     int err, i, fd, ifindex, v = TPACKET_V2;
     struct sockaddr_ll ll;
@@ -123,7 +123,7 @@ static int setup_socket(struct port *port, char *netdev)
 
 
 //liberação do mapeamento e das estruturas
-static void teardown_socket(struct port *port)
+void teardown_socket(struct port *port)
 {
     munmap(port->tx_ring.map, port->tx_ring.size);
     munmap(port->rx_ring.map, port->rx_ring.size);
@@ -134,12 +134,12 @@ static void teardown_socket(struct port *port)
     close(port->fd);
 }
 
-static inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr)
+inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr)
 {
     return ((hdr->tp_status & TP_STATUS_USER) == TP_STATUS_USER);
 }
 
-static inline void v2_rx_user_ready(struct tpacket2_hdr *hdr)
+inline void v2_rx_user_ready(struct tpacket2_hdr *hdr)
 {
     hdr->tp_status = TP_STATUS_KERNEL;
     __sync_synchronize();

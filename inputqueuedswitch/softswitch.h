@@ -59,7 +59,7 @@ struct dataplane {
     struct port *ports;//vetor com as portas
 } dataplane;
 
-static sig_atomic_t sigint = 0;
+extern sig_atomic_t sigint = 0;
 
 union frame_map {//definição de um frame
     struct {
@@ -69,13 +69,10 @@ union frame_map {//definição de um frame
     void *raw;
 };
 
-static void sighandler(int num);
-
-static void voidhandler(int num) {} // NOTE: do nothing prevent mininet from killing the softswitch
-
+void sighandler(int num);
 
 //configura o ring e o mapeamento PACKET_MMAP
-static int setup_ring(int fd, struct ring* ring, int ring_type);
+int setup_ring(int fd, struct ring* ring, int ring_type);
 
 
 //abre e configura um socket para cada par de portas de entrada/saída
@@ -83,20 +80,15 @@ static int setup_socket(struct port *port, char *netdev);
 
 
 //liberação do mapeamento e das estruturas
-static void teardown_socket(struct port *port);
+void teardown_socket(struct port *port);
 
-static inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr);
-static inline void v2_rx_user_ready(struct tpacket2_hdr *hdr);
+inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr);
+inline void v2_rx_user_ready(struct tpacket2_hdr *hdr);
 static inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr);
 static inline void v2_tx_user_ready(struct tpacket2_hdr *hdr);
 
 //envia um frame pela porta de saída correta
 int tx_frame(struct port* port, void *data, int len);
-
-const char *argp_program_version = "ebpf-switch 0.1";
-const char *argp_program_bug_address = "<simon.jouet@glasgow.ac.uk>";
-static char doc[] = "eBPF-switch -- eBPF user space switch";
-static char args_doc[] = "interface1 interface2 [interface3 ...]";
 
 static struct argp_option options[] = {
     {"verbose",  'v',      0,      0, "Produce verbose output" },

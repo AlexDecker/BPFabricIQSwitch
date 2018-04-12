@@ -24,6 +24,12 @@
 #include "ebpf_consts.h"
 #include "softswitch.h"
 
+const char *argp_program_version = "ebpf-switch 0.1";
+const char *argp_program_bug_address = "<simon.jouet@glasgow.ac.uk>";
+static char doc[] = "eBPF-switch -- eBPF user space switch";
+static char args_doc[] = "interface1 interface2 [interface3 ...]";
+
+static void voidhandler(int num) {} // NOTE: do nothing prevent mininet from killing the softswitch
 
 int main(int argc, char **argv)
 {
