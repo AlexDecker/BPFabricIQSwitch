@@ -86,18 +86,6 @@ parse_opt(int key, char *arg, struct argp_state *state)
 
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
-#define MAX_INTERFACES 255
-
-struct arguments
-{
-    char *interfaces[MAX_INTERFACES];
-    int interface_count;
-    unsigned long long dpid;
-    char *controller;
-
-    int verbose;
-};
-
 
 static void voidhandler(int num) {} // NOTE: do nothing prevent mininet from killing the softswitch
 
