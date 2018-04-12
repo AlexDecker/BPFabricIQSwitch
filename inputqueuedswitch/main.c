@@ -38,28 +38,28 @@
 #endif
 
 struct ring {
-    struct iovec *rd;
-    uint8_t *map;
-    struct tpacket_req req;
+    struct iovec *rd;//sys/uio.h. Define um buffer eficiente (não sofre swap)
+    uint8_t *map;//mapeamento (retorno da função mmap)
+    struct tpacket_req req;//encapsula configurações do PACKET_MMAP
     int size;
-    int frame_num;
+    int frame_num;//número de frames (cada frame possui um pacote e um cabeçalho extra)
 };
 
 struct port {
-    int fd;
-    struct ring rx_ring;
-    struct ring tx_ring;
+    int fd;//identificador do socket
+    struct ring rx_ring;//queue de entrada
+    struct ring tx_ring;//queue de saída
 };
 
 struct dataplane {
-    unsigned long long dpid;
-    int port_count;
-    struct port *ports;
+    unsigned long long dpid;//identificador do plano de dados
+    int port_count;//número de portas
+    struct port *ports;//vetor com as portas
 } dataplane;
 
 static sig_atomic_t sigint = 0;
 
-union frame_map {
+union frame_map {//definição de um frame
     struct {
         struct tpacket2_hdr tp_h __aligned_tpacket;
         struct sockaddr_ll s_ll __align_tpacket(sizeof(struct tpacket2_hdr));
@@ -74,6 +74,8 @@ static void sighandler(int num)
 
 static void voidhandler(int num) {} // NOTE: do nothing prevent mininet from killing the softswitch
 
+
+//configura o ring e o mapeamento PACKET_MMAP
 static int setup_ring(int fd, struct ring* ring, int ring_type)
 {
     int err;
@@ -81,15 +83,18 @@ static int setup_ring(int fd, struct ring* ring, int ring_type)
 
     memset(&ring->req, 0, sizeof(ring->req));
 
+    //configurações do mapeamento PACKET_MMAP
     ring->req.tp_block_size = getpagesize() << 2;
     ring->req.tp_frame_size = TPACKET_ALIGNMENT << 7;
     ring->req.tp_block_nr = blocknum;
     ring->req.tp_frame_nr = ring->req.tp_block_size /
                             ring->req.tp_frame_size *
                             ring->req.tp_block_nr;
-
+    
+    //determinação do tamanho do ring
     ring->size = ring->req.tp_block_size * ring->req.tp_block_nr;
 
+    //instalando as configurações (em ring->req. ring_type define rx/tx)
     err = setsockopt(fd, SOL_PACKET, ring_type, &ring->req, sizeof(ring->req));
     if (err < 0) {
         perror("setsockopt");
@@ -99,6 +104,8 @@ static int setup_ring(int fd, struct ring* ring, int ring_type)
     return 0;
 }
 
+
+//abre e configura um socket para cada par de portas de entrada/saída
 static int setup_socket(struct port *port, char *netdev)
 {
     int err, i, fd, ifindex, v = TPACKET_V2;
@@ -109,9 +116,8 @@ static int setup_socket(struct port *port, char *netdev)
         perror("interface");
         exit(1);
     }
-    // printf("interface index %d\n", ifindex);
 
-    // Opens a raw socket for this port
+    //abrindo o socket L2
     fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (fd < 0) {
         perror("socket");
@@ -133,6 +139,7 @@ static int setup_socket(struct port *port, char *netdev)
     setup_ring(fd, &port->rx_ring, PACKET_RX_RING);
     setup_ring(fd, &port->tx_ring, PACKET_TX_RING);
 
+    //mapeia o socket aos rings
     port->rx_ring.map = mmap(NULL, port->rx_ring.size + port->tx_ring.size,
         PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, 0);
 
@@ -166,7 +173,7 @@ static int setup_socket(struct port *port, char *netdev)
         port->tx_ring.rd[i].iov_len = port->tx_ring.req.tp_frame_size;
     }
 
-    //
+    //bind do socket
     memset(&ll, 0, sizeof(ll));
     ll.sll_family = PF_PACKET;
     ll.sll_protocol = htons(ETH_P_ALL);
@@ -184,6 +191,8 @@ static int setup_socket(struct port *port, char *netdev)
     return fd;
 }
 
+
+//liberação do mapeamento e das estruturas
 static void teardown_socket(struct port *port)
 {
     munmap(port->tx_ring.map, port->tx_ring.size);
@@ -217,6 +226,7 @@ static inline void v2_tx_user_ready(struct tpacket2_hdr *hdr)
     __sync_synchronize();
 }
 
+//envia um frame pela porta de saída correta
 int tx_frame(struct port* port, void *data, int len) {
     // add the packet to the port tx queue
     struct ring *tx_ring = &port->tx_ring;
@@ -315,6 +325,7 @@ parse_opt(int key, char *arg, struct argp_state *state)
 
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
+//gera um id aleatório para o plano de dados
 unsigned long long random_dpid() {
     srand(time(NULL));
     unsigned long long dpid = 0;
@@ -326,6 +337,7 @@ unsigned long long random_dpid() {
     return dpid & 0xFFFFFFFFFFFFFFFFULL;
 }
 
+//executa uma ação sobre um pacote
 // flags is the hack to force transmission
 void transmit(struct metadatahdr *buf, int len, uint32_t port, int flags) {
     int i;
