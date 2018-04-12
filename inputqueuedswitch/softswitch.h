@@ -95,18 +95,6 @@ inline void v2_tx_user_ready(struct tpacket2_hdr *hdr){
 //envia um frame pela porta de saída correta
 int tx_frame(struct port* port, void *data, int len);
 
-#define MAX_INTERFACES 255
-
-struct arguments
-{
-    char *interfaces[MAX_INTERFACES];
-    int interface_count;
-    unsigned long long dpid;
-    char *controller;
-
-    int verbose;
-};
-
 //gera um id aleatório para o plano de dados
 unsigned long long random_dpid();
 //executa uma ação sobre um pacote
