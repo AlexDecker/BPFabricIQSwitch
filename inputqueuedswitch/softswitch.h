@@ -1,5 +1,3 @@
-#ifndef SOFT_SWITCH_H
-#define SOFT_SWITCH_H
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -23,6 +21,23 @@
 #include "ubpf.h"
 #include "agent.h"
 #include "ebpf_consts.h"
+
+#ifndef likely
+    #define likely(x)        __builtin_expect(!!(x), 1)
+#endif
+#ifndef unlikely
+    #define unlikely(x)        __builtin_expect(!!(x), 0)
+#endif
+
+#ifndef __aligned_tpacket
+    #define __aligned_tpacket    __attribute__((aligned(TPACKET_ALIGNMENT)))
+#endif
+#ifndef __align_tpacket
+    #define __align_tpacket(x)    __attribute__((aligned(TPACKET_ALIGN(x))))
+#endif
+
+#ifndef SOFT_SWITCH_H
+#define SOFT_SWITCH_H
 
 struct ring {
     struct iovec *rd;//sys/uio.h. Define um buffer eficiente (não sofre swap)
@@ -86,18 +101,4 @@ unsigned long long random_dpid();
 //executa uma ação sobre um pacote
 // flags is the hack to force transmission
 void transmit(struct metadatahdr *buf, int len, uint32_t port, int flags);
-#endif
-
-#ifndef likely
-    #define likely(x)        __builtin_expect(!!(x), 1)
-#endif
-#ifndef unlikely
-    #define unlikely(x)        __builtin_expect(!!(x), 0)
-#endif
-
-#ifndef __aligned_tpacket
-    #define __aligned_tpacket    __attribute__((aligned(TPACKET_ALIGNMENT)))
-#endif
-#ifndef __align_tpacket
-    #define __align_tpacket(x)    __attribute__((aligned(TPACKET_ALIGN(x))))
 #endif
