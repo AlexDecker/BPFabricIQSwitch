@@ -59,8 +59,6 @@ struct dataplane {
     struct port *ports;//vetor com as portas
 } dataplane;
 
-extern sig_atomic_t sigint = 0;
-
 union frame_map {//definição de um frame
     struct {
         struct tpacket2_hdr tp_h __aligned_tpacket;
@@ -68,8 +66,6 @@ union frame_map {//definição de um frame
     } *v2;
     void *raw;
 };
-
-void sighandler(int num);
 
 //configura o ring e o mapeamento PACKET_MMAP
 int setup_ring(int fd, struct ring* ring, int ring_type);
@@ -82,14 +78,14 @@ int setup_socket(struct port *port, char *netdev);
 //liberação do mapeamento e das estruturas
 void teardown_socket(struct port *port);
 
-inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
+extern inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
     return ((hdr->tp_status & TP_STATUS_USER) == TP_STATUS_USER);}
-inline void v2_rx_user_ready(struct tpacket2_hdr *hdr){
+extern inline void v2_rx_user_ready(struct tpacket2_hdr *hdr){
     hdr->tp_status = TP_STATUS_KERNEL;
     __sync_synchronize();}
-inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr){
+extern inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr){
     return !(hdr->tp_status & (TP_STATUS_SEND_REQUEST | TP_STATUS_SENDING));}
-inline void v2_tx_user_ready(struct tpacket2_hdr *hdr){
+extern inline void v2_tx_user_ready(struct tpacket2_hdr *hdr){
     hdr->tp_status = TP_STATUS_SEND_REQUEST;
     __sync_synchronize();}
 

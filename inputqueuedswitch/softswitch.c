@@ -1,10 +1,5 @@
 #include "softswitch.h"
 
-void sighandler(int num)
-{
-    sigint = 1;
-}
-
 //configura o ring e o mapeamento PACKET_MMAP
 int setup_ring(int fd, struct ring* ring, int ring_type)
 {
