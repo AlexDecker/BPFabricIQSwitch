@@ -6,7 +6,7 @@ void sighandler(int num)
 }
 
 //configura o ring e o mapeamento PACKET_MMAP
-static int setup_ring(int fd, struct ring* ring, int ring_type)
+int setup_ring(int fd, struct ring* ring, int ring_type)
 {
     int err;
     unsigned int blocknum = 256;
@@ -145,12 +145,12 @@ inline void v2_rx_user_ready(struct tpacket2_hdr *hdr)
     __sync_synchronize();
 }
 
-static inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr)
+inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr)
 {
     return !(hdr->tp_status & (TP_STATUS_SEND_REQUEST | TP_STATUS_SENDING));
 }
 
-static inline void v2_tx_user_ready(struct tpacket2_hdr *hdr)
+inline void v2_tx_user_ready(struct tpacket2_hdr *hdr)
 {
     hdr->tp_status = TP_STATUS_SEND_REQUEST;
     __sync_synchronize();
@@ -191,42 +191,6 @@ int tx_frame(struct port* port, void *data, int len) {
     }
 
     return -1; // Kernel not ready, dropping the packet
-}
-
-static error_t
-parse_opt(int key, char *arg, struct argp_state *state)
-{
-    struct arguments *arguments = state->input;
-
-    switch (key)
-    {
-        case 'v':
-            arguments->verbose = 1;
-            break;
-
-        case 'd':
-            arguments->dpid = strtoull(arg, NULL, 10);
-            break;
-
-        case 'c':
-            arguments->controller = arg;
-            break;
-
-        case ARGP_KEY_ARG:
-            arguments->interfaces[state->arg_num] = arg;
-            arguments->interface_count++;
-            break;
-
-        case ARGP_KEY_END:
-            if (state->arg_num < 1) /* Not enough arguments. */
-                argp_usage (state);
-            break;
-
-        default:
-            return ARGP_ERR_UNKNOWN;
-    }
-
-    return 0;
 }
 
 //gera um id aleatório para o plano de dados

@@ -17,7 +17,6 @@
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
-#include <argp.h>
 
 #include <time.h>
 
@@ -76,7 +75,7 @@ int setup_ring(int fd, struct ring* ring, int ring_type);
 
 
 //abre e configura um socket para cada par de portas de entrada/saída
-static int setup_socket(struct port *port, char *netdev);
+int setup_socket(struct port *port, char *netdev);
 
 
 //liberação do mapeamento e das estruturas
@@ -84,18 +83,11 @@ void teardown_socket(struct port *port);
 
 inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr);
 inline void v2_rx_user_ready(struct tpacket2_hdr *hdr);
-static inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr);
-static inline void v2_tx_user_ready(struct tpacket2_hdr *hdr);
+inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr);
+inline void v2_tx_user_ready(struct tpacket2_hdr *hdr);
 
 //envia um frame pela porta de saída correta
 int tx_frame(struct port* port, void *data, int len);
-
-static struct argp_option options[] = {
-    {"verbose",  'v',      0,      0, "Produce verbose output" },
-    {"dpid"   ,  'd', "dpid",      0, "Datapath id of the switch"},
-    {"controller", 'c', "address", 0, "Controller address default to 127.0.0.1:9000"},
-    { 0 }
-};
 
 #define MAX_INTERFACES 255
 
@@ -108,11 +100,6 @@ struct arguments
 
     int verbose;
 };
-
-static error_t
-parse_opt(int key, char *arg, struct argp_state *state);
-
-static struct argp argp = { options, parse_opt, args_doc, doc };
 
 //gera um id aleatório para o plano de dados
 unsigned long long random_dpid();

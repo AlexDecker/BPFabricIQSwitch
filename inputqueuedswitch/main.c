@@ -29,6 +29,76 @@ const char *argp_program_bug_address = "<simon.jouet@glasgow.ac.uk>";
 static char doc[] = "eBPF-switch -- eBPF user space switch";
 static char args_doc[] = "interface1 interface2 [interface3 ...]";
 
+static struct argp_option options[] = {
+    {"verbose",  'v',      0,      0, "Produce verbose output" },
+    {"dpid"   ,  'd', "dpid",      0, "Datapath id of the switch"},
+    {"controller", 'c', "address", 0, "Controller address default to 127.0.0.1:9000"},
+    { 0 }
+};
+
+#define MAX_INTERFACES 255
+
+struct arguments
+{
+    char *interfaces[MAX_INTERFACES];
+    int interface_count;
+    unsigned long long dpid;
+    char *controller;
+
+    int verbose;
+};
+
+static error_t
+parse_opt(int key, char *arg, struct argp_state *state)
+{
+    struct arguments *arguments = state->input;
+
+    switch (key)
+    {
+        case 'v':
+            arguments->verbose = 1;
+            break;
+
+        case 'd':
+            arguments->dpid = strtoull(arg, NULL, 10);
+            break;
+
+        case 'c':
+            arguments->controller = arg;
+            break;
+
+        case ARGP_KEY_ARG:
+            arguments->interfaces[state->arg_num] = arg;
+            arguments->interface_count++;
+            break;
+
+        case ARGP_KEY_END:
+            if (state->arg_num < 1) /* Not enough arguments. */
+                argp_usage (state);
+            break;
+
+        default:
+            return ARGP_ERR_UNKNOWN;
+    }
+
+    return 0;
+}
+
+static struct argp argp = { options, parse_opt, args_doc, doc };
+
+#define MAX_INTERFACES 255
+
+struct arguments
+{
+    char *interfaces[MAX_INTERFACES];
+    int interface_count;
+    unsigned long long dpid;
+    char *controller;
+
+    int verbose;
+};
+
+
 static void voidhandler(int num) {} // NOTE: do nothing prevent mininet from killing the softswitch
 
 int main(int argc, char **argv)
