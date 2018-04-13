@@ -128,7 +128,17 @@ int main(int argc, char **argv)
     // signal(SIGINT, sighandler);
     signal(SIGINT, voidhandler);
     signal(SIGKILL, sighandler);
-
+	
+	pthread_t tid;
+	switchCtrlReg* ctrl = createControlRegisters();
+	
+	mainPathArg* mArg = (mainPathArg*) malloc(sizeof(mainPathArg));
+    mArg->ctrl = ctrl;
+	
+	commonPathArg* cArg = (commonPathArg*) malloc(
+		sizeof(commonPathArg)*dataplane.port_count);
+		
+	
     /* setup all the interfaces */
     printf("Setting up %d interfaces\n", dataplane.port_count);
     for (i = 0; i < dataplane.port_count; i++) {
@@ -199,6 +209,8 @@ int main(int argc, char **argv)
     }
 
     /* House keeping */
+	free(cArg);
+	free(mArg);
     agent_stop();
     printf("Terminating ...\n");
     for (i = 0; i < dataplane.port_count; i++) {
