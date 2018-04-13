@@ -24,7 +24,9 @@
 	//dedicados a cada porta de entrada
 	typedef struct{
         	switchCtrlReg* ctrl;
-	        int id;
+	        int id;//útil para prints em depurações
+			struct ring* rx_ring; //input buffer
+			
 	}commonPathArg;
 
 	void* mainBPFabricPath(void* arg);

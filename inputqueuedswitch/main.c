@@ -165,7 +165,6 @@ int main(int argc, char **argv)
     agent_start(&ubpf_fn, (tx_packet_fn)transmit, &options);
 
     //
-    union frame_map ppd;
 
     while (likely(!sigint)) {
         //
@@ -175,6 +174,7 @@ int main(int argc, char **argv)
 
             // process all the packets received in the rx_ring
             while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
+				union frame_map ppd;
                 ppd.raw = rx_ring->rd[rx_ring->frame_num].iov_base;
 
                 // printf("metadatahdr len %lu\n", sizeof(struct metadatahdr)); // Should be  ppd.v2->tp_h.tp_mac - TPACKET2_HDRLEN
