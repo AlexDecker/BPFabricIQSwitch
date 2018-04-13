@@ -1,0 +1,38 @@
+/*Este código visa testar a implementação do Input-Queued Switch
+  utilizando uma thread por fila de entrada e mantendo uma thread
+  para o controle de todas as demais.
+*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include "switchFabric.h"
+
+
+
+int main(){
+    int i; int n = 4;
+    pthread_t tid;
+
+    switchCtrlReg* ctrl = createControlRegisters();
+
+    mainPathArg* mArg = (mainPathArg*) malloc(sizeof(mainPathArg));
+    mArg->ctrl = ctrl;
+
+    commonPathArg* cArg = (commonPathArg*) malloc(sizeof(commonPathArg)*n);
+ 
+    //cria a thread com o caminho de dados principal
+    pthread_create(&tid, NULL, mainBPFabricPath, mArg);
+
+    //cria cada thread com os caminhos de dados dedicados
+    for (i = 0; i < n; i++){
+	    cArg[i].ctrl = ctrl;
+	    cArg[i].id = i;
+	    pthread_create(&tid, NULL, commonDataPath,cArg+i);
+    }
+ 
+    pthread_exit(NULL);
+	free(cArg);
+	free(mArg);
+    return 0;
+}

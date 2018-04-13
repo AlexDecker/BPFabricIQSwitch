@@ -23,6 +23,7 @@
 #include "agent.h"
 #include "ebpf_consts.h"
 #include "softswitch.h"
+#include "switchFabric.h"
 
 const char *argp_program_version = "ebpf-switch 0.1";
 const char *argp_program_bug_address = "<simon.jouet@glasgow.ac.uk>";
