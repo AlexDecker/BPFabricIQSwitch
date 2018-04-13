@@ -1,10 +1,11 @@
 #ifndef SWITCH_FABRIC
 
 	#define SWITCH_FABRIC
-        #include <pthread.h>
-        #include <stdio.h>
-        #include <stdlib.h>
-        #include <stdbool.h>
+	#include <pthread.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <stdbool.h>
+	#include "softswitch.h"
 
 	//estrutura utilizada para sincronizar as threads
 	typedef struct{
