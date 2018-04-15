@@ -18,6 +18,7 @@ switchCtrlReg* createControlRegisters(){
 void* mainBPFabricPath(void* arg){
 	int i;
 	mainPathArg* Arg = (mainPathArg*) arg;
+	printf("Initializing main datapath\n");
 	while (likely(!sigint)) {
 		//realiza o metadata prepend inserindo um ponteiro pra estrutura de filas
 		//executa o programa eBFP
@@ -25,6 +26,7 @@ void* mainBPFabricPath(void* arg){
 		//retira da fila de saída os pacotes a serem enviados
 		//envia os pacotes
 		if(Arg->ctrl->nReady==Arg->nPorts){//se todas já estão prontas
+			printf("All ports ready\n");
 			pthread_mutex_lock(&(Arg->ctrl->mutex));
 			// Send all the pendings packets for each interface
 			for (i = 0; i < Arg->nPorts; i++) {
@@ -37,6 +39,7 @@ void* mainBPFabricPath(void* arg){
 			poll(Arg->pfds, Arg->nPorts, -1);
 			pthread_mutex_unlock(&(Arg->ctrl->mutex));
 		}else{//nada a fazer, apenas durma
+			printf("Main datapath must rest\n");
 			sched_yield();
 		}
 	}
@@ -45,6 +48,8 @@ void* mainBPFabricPath(void* arg){
 
 void* commonDataPath(void* arg){
 	commonPathArg* Arg = (commonPathArg*) arg;
+	
+	printf("Initializing datapath for port %d\n",Arg->portNumber);
 	
 	while(Arg->ctrl->running){
 		//retira um novo pacote da fila de entrada
@@ -67,17 +72,23 @@ void* commonDataPath(void* arg){
 				/* Here we have the packet and we can do whatever we want with it */
 				if (Arg->ubpf_fn != NULL) {
 					uint64_t ret = Arg->ubpf_fn(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
+					printf("Datapath of port %d started executing an action\n",Arg->portNumber);
 					transmit(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr), (uint32_t)ret, 0);
+					printf("Datapath of port %d finished executing an action\n",Arg->portNumber);
+				}else{
+					printf("Datapath of port %d got a null agent!\n",Arg->portNumber);
 				}
 
 				// Frame has been used, release the buffer space
 				v2_rx_user_ready(ppd.raw);
 				rx_ring->frame_num = (rx_ring->frame_num + 1) % rx_ring->req.tp_frame_nr;
 			}else{
+				printf("Datapath of port %d finished the entire queue\n",Arg->portNumber);
 				Arg->imReady = true;
 				Arg->ctrl->nReady++;
 			}
 		}else{//nada a fazer, apenas durma
+			printf("Datapath of port %d must rest\n",Arg->portNumber);
 			sched_yield();
 		}
 	}

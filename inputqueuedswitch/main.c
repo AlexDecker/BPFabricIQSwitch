@@ -161,7 +161,7 @@ int main(int argc, char **argv)
 		cArg[i].imReady = false;
 		cArg[i].ubpf_fn = ubpf_fn;//ponteiro da função do agente eBPF
 		//criando a thread responsável por esta porta de entrada
-		//pthread_create(&tid, NULL, commonDataPath,cArg+i);
+		pthread_create(&tid, NULL, commonDataPath,cArg+i);
 	}
 	
 	//cria a thread com o caminho de dados principal
@@ -169,50 +169,7 @@ int main(int argc, char **argv)
     mArg->ctrl = ctrl;
 	mArg->nPorts = dataplane.port_count;
 	mArg->allCommonPaths = cArg;
-    //pthread_create(&tid, NULL, mainBPFabricPath, mArg);
-	
-	////////////////////////////////////////////////////////////<-
-    union frame_map ppd;
-    while (likely(!sigint)) {
-        //
-        for (i = 0; i < dataplane.port_count; i++) {
-            //
-            struct ring *rx_ring = &dataplane.ports[i].rx_ring;
-
-            // process all the packets received in the rx_ring
-            while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
-                ppd.raw = rx_ring->rd[rx_ring->frame_num].iov_base;
-
-                // printf("metadatahdr len %lu\n", sizeof(struct metadatahdr)); // Should be  ppd.v2->tp_h.tp_mac - TPACKET2_HDRLEN
-
-                /**/
-                struct metadatahdr *metadatahdr = (struct metadatahdr *)((uint8_t *)ppd.raw + TPACKET2_HDRLEN);
-                metadatahdr->in_port = i;
-                metadatahdr->sec = ppd.v2->tp_h.tp_sec;
-                metadatahdr->nsec = ppd.v2->tp_h.tp_nsec;
-                metadatahdr->length = (uint16_t)ppd.v2->tp_h.tp_len;
-
-                /* Here we have the packet and we can do whatever we want with it */
-                if (ubpf_fn != NULL) {
-                    uint64_t ret = ubpf_fn(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
-                    // printf("bpf return value %lu\n", ret);
-                    transmit(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr), (uint32_t)ret, 0);
-                }
-
-                // Frame has been used, release the buffer space
-                v2_rx_user_ready(ppd.raw);
-                rx_ring->frame_num = (rx_ring->frame_num + 1) % rx_ring->req.tp_frame_nr;
-            }
-        }
-
-        // Send all the pendings packets for each interface
-        for (i = 0; i < dataplane.port_count; i++) {
-            send(dataplane.ports[i].fd, NULL, 0, MSG_DONTWAIT); // Should we use POLLOUT and just queue the messages to transmit then call send() once
-        }
-
-        // Poll for the next socket POLLIN or POLLERR
-        poll(pfds, dataplane.port_count, -1);
-    }///////////////////////////////////<-
+    pthread_create(&tid, NULL, mainBPFabricPath, mArg);
 
     /* House keeping */
 	pthread_exit(NULL);
