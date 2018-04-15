@@ -157,6 +157,7 @@ int main(int argc, char **argv)
 		cArg[i].port = &dataplane.ports[i];
 		cArg[i].portNumber = i;
 		cArg[i].imReady = false;
+		cArg[i].ubpf_fn = ubpf_fn;//ponteiro da função do agente eBPF
 		//criando a thread responsável por esta porta de entrada
 		//pthread_create(&tid, NULL, commonDataPath,cArg+i);
 	}
@@ -166,7 +167,6 @@ int main(int argc, char **argv)
     mArg->ctrl = ctrl;
 	mArg->nPorts = dataplane.port_count;
 	mArg->allCommonPaths = cArg;
-	mArg->ubpf_fn = ubpf_fn;
     //pthread_create(&tid, NULL, mainBPFabricPath, mArg);
 
     /* House keeping */

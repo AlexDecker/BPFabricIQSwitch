@@ -22,8 +22,9 @@
 	typedef struct{
         	switchCtrlReg* ctrl;//dá acesso ao registro de controle
 			bool imReady;//a thread comum autoriza a principal a dar poll
-	        int portNumber;
+	        int portNumber;//identificandor da porta
 			struct port* port;
+			ubpf_jit_fn ubpf_fn;//ponteiro da função do agente eBPF
 	}commonPathArg;
 	
 	//argumentos necessários para a operação do caminho de dados
@@ -33,7 +34,6 @@
 			int nPorts;
 			commonPathArg* allCommonPaths;
 			struct pollfd* pfds;
-			ubpf_jit_fn ubpf_fn;
 	}mainPathArg;
 
 	void* mainBPFabricPath(void* arg);
