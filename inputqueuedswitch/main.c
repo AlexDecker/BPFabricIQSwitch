@@ -123,21 +123,12 @@ int main(int argc, char **argv)
     dataplane.ports = calloc(dataplane.port_count, sizeof(struct port));
 
     /* */
-    struct pollfd pfds[dataplane.port_count];
+    struct pollfd* pfds = (struct pollfd*) malloc(
+		sizeof(struct pollfd)*dataplane.port_count);
 
     // signal(SIGINT, sighandler);
     signal(SIGINT, voidhandler);
     signal(SIGKILL, sighandler);
-	
-	pthread_t tid;
-	switchCtrlReg* ctrl = createControlRegisters();
-	
-	mainPathArg* mArg = (mainPathArg*) malloc(sizeof(mainPathArg));
-    mArg->ctrl = ctrl;
-	
-	commonPathArg* cArg = (commonPathArg*) malloc(
-		sizeof(commonPathArg)*dataplane.port_count);
-		
 	
     /* setup all the interfaces */
     printf("Setting up %d interfaces\n", dataplane.port_count);
@@ -163,55 +154,39 @@ int main(int argc, char **argv)
     };
 
     agent_start(&ubpf_fn, (tx_packet_fn)transmit, &options);
-
-    //
-
-    while (likely(!sigint)) {
-        //
-        for (i = 0; i < dataplane.port_count; i++) {
-            //
-            struct ring *rx_ring = &dataplane.ports[i].rx_ring;
-
-            // process all the packets received in the rx_ring
-            while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
-				union frame_map ppd;
-                ppd.raw = rx_ring->rd[rx_ring->frame_num].iov_base;
-
-                // printf("metadatahdr len %lu\n", sizeof(struct metadatahdr)); // Should be  ppd.v2->tp_h.tp_mac - TPACKET2_HDRLEN
-
-                /**/
-                struct metadatahdr *metadatahdr = (struct metadatahdr *)((uint8_t *)ppd.raw + TPACKET2_HDRLEN);
-                metadatahdr->in_port = i;
-                metadatahdr->sec = ppd.v2->tp_h.tp_sec;
-                metadatahdr->nsec = ppd.v2->tp_h.tp_nsec;
-                metadatahdr->length = (uint16_t)ppd.v2->tp_h.tp_len;
-
-                /* Here we have the packet and we can do whatever we want with it */
-                if (ubpf_fn != NULL) {
-                    uint64_t ret = ubpf_fn(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
-                    // printf("bpf return value %lu\n", ret);
-                    transmit(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr), (uint32_t)ret, 0);
-                }
-
-                // Frame has been used, release the buffer space
-                v2_rx_user_ready(ppd.raw);
-                rx_ring->frame_num = (rx_ring->frame_num + 1) % rx_ring->req.tp_frame_nr;
-            }
-        }
-
-        // Send all the pendings packets for each interface
-        for (i = 0; i < dataplane.port_count; i++) {
-            send(dataplane.ports[i].fd, NULL, 0, MSG_DONTWAIT); // Should we use POLLOUT and just queue the messages to transmit then call send() once
-        }
-
-        // Poll for the next socket POLLIN or POLLERR
-        poll(pfds, dataplane.port_count, -1);
-    }
+	
+	commonPathArg* cArg = (commonPathArg*) malloc(
+		sizeof(commonPathArg)*dataplane.port_count);
+	
+	pthread_t tid;
+    switchCtrlReg* ctrl = createControlRegisters();
+	
+	for (i = 0; i < dataplane.port_count; i++) {
+		//preenchendo os campos da estrutura commonPathArg correspondente
+		//a essa thread
+        cArg[i].crtl = ctrl;
+		cArg[i].port = &dataplane.ports[i];
+		cArg[i].id = i;
+		cArg[i].imReady = false;
+		//criando a thread responsável por esta porta de entrada
+		//pthread_create(&tid, NULL, commonDataPath,cArg+i);
+	}
+	
+	//cria a thread com o caminho de dados principal
+	mainPathArg* mArg = (mainPathArg*) malloc(sizeof(mainPathArg));
+    mArg->ctrl = ctrl;
+	mArg->nPorts = dataplane.port_count;
+	mArg->allCommonPaths = cArg;
+    //pthread_create(&tid, NULL, mainBPFabricPath, mArg);
 
     /* House keeping */
+	pthread_exit(NULL);
 	free(cArg);
 	free(mArg);
+	free(pfds);
+	pthread_mutex_destroy(&(ctrl->mutex));
     agent_stop();
+	
     printf("Terminating ...\n");
     for (i = 0; i < dataplane.port_count; i++) {
         teardown_socket(&dataplane.ports[i]);
