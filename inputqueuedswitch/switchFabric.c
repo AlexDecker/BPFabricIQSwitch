@@ -53,7 +53,7 @@ void* commonDataPath(void* arg){
 		//adiciona a ação desejada aos metadados
 		//insere o pacote na fila de saída
 		if(!Arg->imReady){//se ainda não tiver terminado de processar
-			struct ring* rx_ring = Arg->port->rx_ring;
+			struct ring* rx_ring = &(Arg->port->rx_ring);
 			if (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
 				union frame_map ppd;
 				ppd.raw = rx_ring->rd[rx_ring->frame_num].iov_base;
