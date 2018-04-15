@@ -170,7 +170,7 @@ int main(int argc, char **argv)
     mArg->ctrl = ctrl;
 	mArg->nPorts = dataplane.port_count;
 	mArg->allCommonPaths = cArg;
-	mArg->pdfs = pdfs;
+	mArg->pfds = pfds;
     pthread_create(&tid, NULL, mainBPFabricPath, mArg);
 
     /* House keeping */

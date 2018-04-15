@@ -91,7 +91,7 @@ void* commonDataPath(void* arg){
 				Arg->ctrl->nReady++;
 			}
 		}else{//nada a fazer, apenas durma
-			printf("Datapath of port %d must rest\n",Arg->portNumber);
+			//printf("Datapath of port %d must rest\n",Arg->portNumber);
 			//sched_yield();
 		}
 	}
