@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 	pthread_t tid;
     switchCtrlReg* ctrl = createControlRegisters();
 	
-	/*for (i = 0; i < dataplane.port_count; i++) {
+	for (i = 0; i < dataplane.port_count; i++) {
 		//preenchendo os campos da estrutura commonPathArg correspondente
 		//a essa thread
         cArg[i].ctrl = ctrl;
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
 		cArg[i].imReady = false;
 		cArg[i].ubpf_fn = ubpf_fn;//ponteiro da função do agente eBPF
 		//criando a thread responsável por esta porta de entrada
-		pthread_create(&tid, NULL, commonDataPath,cArg+i);
+		//pthread_create(&tid, NULL, commonDataPath,cArg+i);
 	}
 	
 	//cria a thread com o caminho de dados principal
@@ -169,9 +169,10 @@ int main(int argc, char **argv)
     mArg->ctrl = ctrl;
 	mArg->nPorts = dataplane.port_count;
 	mArg->allCommonPaths = cArg;
-    pthread_create(&tid, NULL, mainBPFabricPath, mArg);*/
+    //pthread_create(&tid, NULL, mainBPFabricPath, mArg);
 	
 	////////////////////////////////////////////////////////////<-
+    union frame_map ppd;
     while (likely(!sigint)) {
         //
         for (i = 0; i < dataplane.port_count; i++) {
