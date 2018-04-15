@@ -39,7 +39,7 @@
 #ifndef SOFT_SWITCH_H
 #define SOFT_SWITCH_H
 
-extern sig_atomic_t sigint;
+extern sig_atomic_t sigint;//declaração
 
 struct ring {
     struct iovec *rd;//sys/uio.h. Define um buffer eficiente (não sofre swap)

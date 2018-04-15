@@ -90,6 +90,8 @@ static struct argp argp = { options, parse_opt, args_doc, doc };
 
 static void voidhandler(int num) {} // NOTE: do nothing prevent mininet from killing the softswitch
 
+sig_atomic_t sigint;//definição
+
 void sighandler(int num){sigint = 1;}
 
 int main(int argc, char **argv)
