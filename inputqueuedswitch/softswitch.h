@@ -39,6 +39,8 @@
 #ifndef SOFT_SWITCH_H
 #define SOFT_SWITCH_H
 
+extern sig_atomic_t sigint;
+
 struct ring {
     struct iovec *rd;//sys/uio.h. Define um buffer eficiente (não sofre swap)
     uint8_t *map;//mapeamento (retorno da função mmap)

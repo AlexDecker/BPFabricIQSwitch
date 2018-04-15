@@ -90,18 +90,7 @@ static struct argp argp = { options, parse_opt, args_doc, doc };
 
 static void voidhandler(int num) {} // NOTE: do nothing prevent mininet from killing the softswitch
 
-static sig_atomic_t sigint;
-
-void sighandler(int num)
-{
-    sigint = 1;
-}
-
-static inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
-    return ((hdr->tp_status & TP_STATUS_USER) == TP_STATUS_USER);}
-static inline void v2_rx_user_ready(struct tpacket2_hdr *hdr){
-    hdr->tp_status = TP_STATUS_KERNEL;
-    __sync_synchronize();}
+void sighandler(int num){sigint = 1;}
 
 int main(int argc, char **argv)
 {

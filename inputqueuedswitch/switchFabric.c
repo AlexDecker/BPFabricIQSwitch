@@ -1,5 +1,12 @@
 #include "switchFabric.h"
 
+static inline void v2_rx_user_ready(struct tpacket2_hdr *hdr){
+    hdr->tp_status = TP_STATUS_KERNEL;
+    __sync_synchronize();}
+	
+static inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
+    return ((hdr->tp_status & TP_STATUS_USER) == TP_STATUS_USER);}
+
 switchCtrlReg* createControlRegisters(){
 	switchCtrlReg* ctrl = (switchCtrlReg*) malloc(sizeof(switchCtrlReg));
 	ctrl->running = true;
@@ -9,6 +16,7 @@ switchCtrlReg* createControlRegisters(){
 }
 
 void* mainBPFabricPath(void* arg){
+	int i;
 	mainPathArg* Arg = (mainPathArg*) arg;
 	while (likely(!sigint)) {
 		//realiza o metadata prepend inserindo um ponteiro pra estrutura de filas

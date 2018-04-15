@@ -17,15 +17,6 @@
 
 	switchCtrlReg* createControlRegisters();
 
-	//argumentos necessários para a operação do caminho de dados
-	//principal (que atua sobre todo o fabric)
-	typedef struct{
-        	switchCtrlReg* ctrl;
-			int nPorts;
-			commonPathArg* allCommonPaths;
-			struct pollfd* pfds;
-	}mainPathArg;
-
 	//argumentos necessários para a operação dos caminhos de dados
 	//dedicados a cada porta de entrada
 	typedef struct{
@@ -34,6 +25,15 @@
 	        int id;//útil para prints em depurações
 			struct port* port;
 	}commonPathArg;
+	
+	//argumentos necessários para a operação do caminho de dados
+	//principal (que atua sobre todo o fabric)
+	typedef struct{
+        	switchCtrlReg* ctrl;
+			int nPorts;
+			commonPathArg* allCommonPaths;
+			struct pollfd* pfds;
+	}mainPathArg;
 
 	void* mainBPFabricPath(void* arg);
 
