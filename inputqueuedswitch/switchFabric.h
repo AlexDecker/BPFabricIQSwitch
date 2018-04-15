@@ -22,7 +22,7 @@
 	typedef struct{
         	switchCtrlReg* ctrl;//dá acesso ao registro de controle
 			bool imReady;//a thread comum autoriza a principal a dar poll
-	        int id;//útil para prints em depurações
+	        int portNumber;
 			struct port* port;
 	}commonPathArg;
 	
@@ -33,6 +33,7 @@
 			int nPorts;
 			commonPathArg* allCommonPaths;
 			struct pollfd* pfds;
+			ubpf_jit_fn ubpf_fn;
 	}mainPathArg;
 
 	void* mainBPFabricPath(void* arg);

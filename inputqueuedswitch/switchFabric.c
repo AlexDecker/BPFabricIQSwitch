@@ -25,7 +25,7 @@ void* mainBPFabricPath(void* arg){
 		//retira da fila de saída os pacotes a serem enviados
 		//envia os pacotes
 		if(Arg->ctrl->nReady==Arg->nPorts){//se todas já estão prontas
-			pthread_mutex_lock(Arg->ctrl->mutex);
+			pthread_mutex_lock(&(Arg->ctrl->mutex));
 			// Send all the pendings packets for each interface
 			for (i = 0; i < Arg->nPorts; i++) {
 				struct port* porta = Arg->allCommonPaths[i].port;
@@ -35,7 +35,7 @@ void* mainBPFabricPath(void* arg){
 
 			// Poll for the next socket POLLIN or POLLERR
 			poll(Arg->pfds, Arg->nPorts, -1);
-			pthread_mutex_unlock(Arg->ctrl->mutex);
+			pthread_mutex_unlock(&(Arg->ctrl->mutex));
 		}else{//nada a fazer, apenas durma
 			sched_yield();
 		}
@@ -53,20 +53,20 @@ void* commonDataPath(void* arg){
 		//adiciona a ação desejada aos metadados
 		//insere o pacote na fila de saída
 		if(!Arg->imReady){//se ainda não tiver terminado de processar
-			rx_ring = Arg->port.rx_ring;
+			struct ring* rx_ring = Arg->port.rx_ring;
 			if (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
 				union frame_map ppd;
 				ppd.raw = rx_ring->rd[rx_ring->frame_num].iov_base;
 
 				struct metadatahdr *metadatahdr = (struct metadatahdr *)((uint8_t *)ppd.raw + TPACKET2_HDRLEN);
-				metadatahdr->in_port = i;
+				metadatahdr->in_port = Arg->portNumber;
 				metadatahdr->sec = ppd.v2->tp_h.tp_sec;
 				metadatahdr->nsec = ppd.v2->tp_h.tp_nsec;
 				metadatahdr->length = (uint16_t)ppd.v2->tp_h.tp_len;
 
 				/* Here we have the packet and we can do whatever we want with it */
-				if (ubpf_fn != NULL) {
-					uint64_t ret = ubpf_fn(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
+				if (Arg->ubpf_fn != NULL) {
+					uint64_t ret = Arg->ubpf_fn(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
 					transmit(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr), (uint32_t)ret, 0);
 				}
 

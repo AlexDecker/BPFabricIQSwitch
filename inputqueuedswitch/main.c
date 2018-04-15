@@ -153,9 +153,9 @@ int main(int argc, char **argv)
 	for (i = 0; i < dataplane.port_count; i++) {
 		//preenchendo os campos da estrutura commonPathArg correspondente
 		//a essa thread
-        cArg[i].crtl = ctrl;
+        cArg[i].ctrl = ctrl;
 		cArg[i].port = &dataplane.ports[i];
-		cArg[i].id = i;
+		cArg[i].portNumber = i;
 		cArg[i].imReady = false;
 		//criando a thread responsável por esta porta de entrada
 		//pthread_create(&tid, NULL, commonDataPath,cArg+i);
@@ -166,6 +166,7 @@ int main(int argc, char **argv)
     mArg->ctrl = ctrl;
 	mArg->nPorts = dataplane.port_count;
 	mArg->allCommonPaths = cArg;
+	mArg->ubpf_fn = ubpf_fn;
     //pthread_create(&tid, NULL, mainBPFabricPath, mArg);
 
     /* House keeping */
