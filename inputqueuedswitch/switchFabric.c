@@ -12,6 +12,7 @@ switchCtrlReg* createControlRegisters(){
 	ctrl->running = true;
 	pthread_mutex_init(&(ctrl->mutex), NULL);
 	ctrl->nReady = 0;
+	ctrl->preparingfase=false;
 	return ctrl;
 }
 
@@ -27,7 +28,7 @@ void* mainBPFabricPath(void* arg){
 		//envia os pacotes
 		if(Arg->ctrl->nReady==Arg->nPorts){//se todas já estão prontas
 			printf("All ports ready\n");
-			pthread_mutex_lock(&(Arg->ctrl->mutex));
+			Arg->ctrl->preparingfase = true;
 			// Send all the pendings packets for each interface
 			for (i = 0; i < Arg->nPorts; i++) {
 				struct port* porta = Arg->allCommonPaths[i].port;
@@ -37,10 +38,10 @@ void* mainBPFabricPath(void* arg){
 
 			// Poll for the next socket POLLIN or POLLERR
 			poll(Arg->pfds, Arg->nPorts, -1);
-			pthread_mutex_unlock(&(Arg->ctrl->mutex));
+			Arg->ctrl->preparingfase = false;
 		}else{//nada a fazer, apenas durma
-			printf("Main datapath must rest\n");
-			sched_yield();
+			//printf("Main datapath must rest\n");
+			//sched_yield();
 		}
 	}
 	Arg->ctrl->running = false;//finaliza as outras threads
@@ -57,7 +58,7 @@ void* commonDataPath(void* arg){
 		//executa o programa eBPF
 		//adiciona a ação desejada aos metadados
 		//insere o pacote na fila de saída
-		if(!Arg->imReady){//se ainda não tiver terminado de processar
+		if((!Arg->imReady)&&(!Arg->ctrl->preparingfase)){//se ainda não tiver terminado de processar
 			struct ring* rx_ring = &(Arg->port->rx_ring);
 			if (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
 				union frame_map ppd;
@@ -73,7 +74,9 @@ void* commonDataPath(void* arg){
 				if (Arg->ubpf_fn != NULL) {
 					uint64_t ret = Arg->ubpf_fn(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
 					printf("Datapath of port %d started executing an action\n",Arg->portNumber);
+					pthread_mutex_lock(&(Arg->ctrl->mutex));
 					transmit(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr), (uint32_t)ret, 0);
+					pthread_mutex_unlock(&(Arg->ctrl->mutex));
 					printf("Datapath of port %d finished executing an action\n",Arg->portNumber);
 				}else{
 					printf("Datapath of port %d got a null agent!\n",Arg->portNumber);
@@ -89,7 +92,7 @@ void* commonDataPath(void* arg){
 			}
 		}else{//nada a fazer, apenas durma
 			printf("Datapath of port %d must rest\n",Arg->portNumber);
-			sched_yield();
+			//sched_yield();
 		}
 	}
 }
