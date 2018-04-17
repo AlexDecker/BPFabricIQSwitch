@@ -51,6 +51,7 @@ struct ring {
 
 struct port {
     int fd;//identificador do socket
+	int nPackets;//número de pacotes processados desde o último poll
     struct ring rx_ring;//queue de entrada
     struct ring tx_ring;//queue de saída
 };

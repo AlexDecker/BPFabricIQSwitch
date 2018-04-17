@@ -52,7 +52,8 @@ int setup_socket(struct port *port, char *netdev)
         perror("socket");
         exit(1);
     }
-
+	
+	port->nPackets = 0;
     port->fd = fd;
 
     err = setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v));

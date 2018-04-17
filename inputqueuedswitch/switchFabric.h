@@ -10,7 +10,6 @@
 
 	//estrutura utilizada para sincronizar as threads
 	typedef struct{
-        	bool running;//se false, as threads devem finalizar
 			bool preparingfase;
 			pthread_mutex_t mutex;
 			int nReady;//número de threads que aguardam um poll
@@ -22,10 +21,11 @@
 	//dedicados a cada porta de entrada
 	typedef struct{
         	switchCtrlReg* ctrl;//dá acesso ao registro de controle
-			bool imReady;//a thread comum autoriza a principal a dar poll
+			bool imReady;//a thread comum autoriza a principal a dar send
 	        int portNumber;//identificandor da porta
 			struct port* port;
-			ubpf_jit_fn ubpf_fn;//ponteiro da função do agente eBPF
+			ubpf_jit_fn* ubpf_fn;//ponteiro do ponteiro da função do agente eBPF
+			struct pollfd* pfd;
 	}commonPathArg;
 	
 	//argumentos necessários para a operação do caminho de dados
@@ -36,6 +36,8 @@
 			commonPathArg* allCommonPaths;
 			struct pollfd* pfds;
 	}mainPathArg;
+
+	void datapathEngine(void* arg);
 
 	void* mainBPFabricPath(void* arg);
 

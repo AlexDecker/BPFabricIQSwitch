@@ -16,6 +16,7 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <argp.h>
+#include <pthread.h>
 
 #include <time.h>
 
@@ -94,11 +95,9 @@ sig_atomic_t sigint;//definição
 
 void sighandler(int num){sigint = 1;}
 
-int main(int argc, char **argv)
-{
-	sigint = 0;//agora é extern, então a definição no ato de declaração
-	//causa conflitos.
-	
+int main(int argc, char **argv){
+
+	sigint = 0;//agora é extern, então a definição no ato de declaração causa conflitos.	
     int i;
 
     /* Argument Parsing */
@@ -138,31 +137,44 @@ int main(int argc, char **argv)
     printf("\n");
 
     /* */
-    ubpf_jit_fn ubpf_fn = NULL;
+    //ubpf_jit_fn* ubpf_fn = (ubpf_jit_fn*)malloc(dataplane.port_count*sizeof(ubpf_jit_fn));
+    ubpf_jit_fn* ubpf_fn = (ubpf_jit_fn*)malloc(sizeof(ubpf_jit_fn));
+    
     struct agent_options options = {
         .dpid = dataplane.dpid,
         .controller = arguments.controller
     };
-
-    agent_start(&ubpf_fn, (tx_packet_fn)transmit, &options);
+	
+	/*for (i = 0; i < dataplane.port_count; i++) {
+	    agent_start(ubpf_fn+i, (tx_packet_fn)transmit, &options);
+	}*/
+	
+	agent_start(ubpf_fn, (tx_packet_fn)transmit, &options);
 	
 	commonPathArg* cArg = (commonPathArg*) malloc(
 		sizeof(commonPathArg)*dataplane.port_count);
 	
+	if(cArg==NULL){
+		printf("Error while allocating datapath registers");
+	}
+	
 	pthread_t tid;
+	
     switchCtrlReg* ctrl = createControlRegisters();
 	
 	for (i = 0; i < dataplane.port_count; i++) {
 		//preenchendo os campos da estrutura commonPathArg correspondente
 		//a essa thread
         cArg[i].ctrl = ctrl;
-		cArg[i].port = &dataplane.ports[i];
 		cArg[i].portNumber = i;
 		cArg[i].imReady = false;
-		//cArg[i].pfd = pfds+i;
+		cArg[i].pfd = pfds+i;
+		//cArg[i].ubpf_fn = ubpf_fn+i;//ponteiro da função do agente eBPF
 		cArg[i].ubpf_fn = ubpf_fn;//ponteiro da função do agente eBPF
 		//criando a thread responsável por esta porta de entrada
-		pthread_create(&tid, NULL, commonDataPath,cArg+i);
+		if(pthread_create(&tid, NULL, commonDataPath,&cArg[i])){
+			printf("Error while creating a common datapath.\n");
+		}
 	}
 	
 	//cria a thread com o caminho de dados principal
@@ -171,13 +183,34 @@ int main(int argc, char **argv)
 	mArg->nPorts = dataplane.port_count;
 	mArg->allCommonPaths = cArg;
 	mArg->pfds = pfds;
-    pthread_create(&tid, NULL, mainBPFabricPath, mArg);
+    if(pthread_create(&tid, NULL, mainBPFabricPath, mArg)){
+    	printf("Error while creating the main datapath.\n");
+    }
+
+    /*while (likely(!sigint)) {
+        //
+        for (i = 0; i < dataplane.port_count; i++) {
+            //
+            datapathEngine(cArg+i);
+            
+        }
+        
+        // Send all the pendings packets for each interface
+        for (i = 0; i < dataplane.port_count; i++) {
+            send(dataplane.ports[i].fd, NULL, 0, MSG_DONTWAIT);
+			//poll(pfds+i, 1, -1);
+        }
+
+        // Poll for the next socket POLLIN or POLLERR
+        poll(pfds, dataplane.port_count, -1);
+    }*/
 
     /* House keeping */
 	pthread_exit(NULL);
 	free(cArg);
 	free(mArg);
 	free(pfds);
+	free(ubpf_fn);
 	pthread_mutex_destroy(&(ctrl->mutex));
     agent_stop();
 	
