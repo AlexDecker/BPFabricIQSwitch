@@ -175,12 +175,8 @@ int tx_frame(struct port* port, void *data, int len) {
 unsigned long long random_dpid() {
     srand(time(NULL));
     unsigned long long dpid = 0;
-
-    for (int i = 0; i < 5; i++) {
-        dpid = (dpid << 15) | (rand() & 0x7FFF);
-    }
-
-    return dpid & 0xFFFFFFFFFFFFFFFFULL;
+    dpid = rand() & 0xFFFFFFFF;//gera um número aleatório de 32 bits
+    return dpid;
 }
 
 //executa uma ação sobre um pacote
@@ -213,7 +209,7 @@ void transmit(struct metadatahdr *buf, int len, uint32_t port, int flags) {
         //
         case CONTROLLER:
             // printf("Sending to controller\n");
-            agent_packetin(buf, len);
+            agent_packetin(buf, len, buf->in_port);//o último campo é o identificador do agente (correspondente à porta)
             break;
         //
         case DROP:

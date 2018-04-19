@@ -65,6 +65,7 @@ void* mainBPFabricPath(void* arg){
 		}
 		sched_yield();
 	}
+    pthread_exit(NULL);
 }
 
 void* commonDataPath(void* arg){
@@ -81,5 +82,6 @@ void* commonDataPath(void* arg){
 		pthread_mutex_unlock(&(Arg->ctrl->mutex));
 		sched_yield();
 	}
+	pthread_exit(NULL);
 }
 

@@ -21,7 +21,7 @@
 #include <time.h>
 
 #include "ubpf.h"
-#include "agent.h"
+#include "multiAgent.h"
 #include "ebpf_consts.h"
 #include "softswitch.h"
 #include "switchFabric.h"
@@ -109,6 +109,9 @@ int main(int argc, char **argv){
 
     /* */
     dataplane.dpid = arguments.dpid;
+    if((dataplane.dpid>>32)>0){//se o dataplane id tem mais de 32 bits
+    	printf("Warning: dpid has more than 32 bits.\n");
+    }
     dataplane.port_count = arguments.interface_count;
     dataplane.ports = calloc(dataplane.port_count, sizeof(struct port));
 
@@ -137,19 +140,16 @@ int main(int argc, char **argv){
     printf("\n");
 
     /* */
-    //ubpf_jit_fn* ubpf_fn = (ubpf_jit_fn*)malloc(dataplane.port_count*sizeof(ubpf_jit_fn));
-    ubpf_jit_fn* ubpf_fn = (ubpf_jit_fn*)malloc(sizeof(ubpf_jit_fn));
-    
-    struct agent_options options = {
-        .dpid = dataplane.dpid,
-        .controller = arguments.controller
-    };
+    ubpf_jit_fn* ubpf_fn = (ubpf_jit_fn*)malloc(dataplane.port_count*sizeof(ubpf_jit_fn));
+    struct agent_options* options = (struct agent_options*)malloc(
+    	dataplane.port_count*sizeof(struct agent_options));
 	
-	/*for (i = 0; i < dataplane.port_count; i++) {
-	    agent_start(ubpf_fn+i, (tx_packet_fn)transmit, &options);
-	}*/
-	
-	agent_start(ubpf_fn, (tx_packet_fn)transmit, &options);
+	for (i = 0; i < dataplane.port_count; i++) {
+		options[i].dpid = dataplane.dpid + i<<32;//dataplane virtual com uma porta, para
+		options[i].controller = arguments.controller;
+		//facilitar a identificação do agente eBPF
+	    agent_start(ubpf_fn+i, (tx_packet_fn)transmit, options+i, i, dataplane.port_count);
+	}
 	
 	commonPathArg* cArg = (commonPathArg*) malloc(
 		sizeof(commonPathArg)*dataplane.port_count);
@@ -168,9 +168,7 @@ int main(int argc, char **argv){
         cArg[i].ctrl = ctrl;
 		cArg[i].portNumber = i;
 		cArg[i].imReady = false;
-		cArg[i].pfd = pfds+i;
-		//cArg[i].ubpf_fn = ubpf_fn+i;//ponteiro da função do agente eBPF
-		cArg[i].ubpf_fn = ubpf_fn;//ponteiro da função do agente eBPF
+		cArg[i].ubpf_fn = ubpf_fn+i;//ponteiro da função do agente eBPF
 		//criando a thread responsável por esta porta de entrada
 		if(pthread_create(&tid, NULL, commonDataPath,&cArg[i])){
 			printf("Error while creating a common datapath.\n");
@@ -187,26 +185,8 @@ int main(int argc, char **argv){
     	printf("Error while creating the main datapath.\n");
     }
 
-    /*while (likely(!sigint)) {
-        //
-        for (i = 0; i < dataplane.port_count; i++) {
-            //
-            datapathEngine(cArg+i);
-            
-        }
-        
-        // Send all the pendings packets for each interface
-        for (i = 0; i < dataplane.port_count; i++) {
-            send(dataplane.ports[i].fd, NULL, 0, MSG_DONTWAIT);
-			//poll(pfds+i, 1, -1);
-        }
-
-        // Poll for the next socket POLLIN or POLLERR
-        poll(pfds, dataplane.port_count, -1);
-    }*/
-
     /* House keeping */
-	pthread_exit(NULL);
+	pthread_exit(NULL);//trocar por um for e pthread_join
 	free(cArg);
 	free(mArg);
 	free(pfds);

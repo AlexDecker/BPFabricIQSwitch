@@ -19,7 +19,7 @@
 #include <time.h>
 
 #include "ubpf.h"
-#include "agent.h"
+#include "multiAgent.h"
 #include "ebpf_consts.h"
 
 #ifndef likely

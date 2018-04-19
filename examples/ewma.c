@@ -38,7 +38,7 @@ uint64_t prog(struct packet *pkt)
         // compute the new prediction, prediction = alpha * volume + (1.0-alpha)*prediction
         ewma_stat->prediction = (ewma_stat->volume + (ewma_stat->prediction << 3) - ewma_stat->prediction) >> 3;
 
-        bpf_notify(pkt->metadata.in_port, ewma_stat, sizeof(struct ewma_stats));
+        bpf_notify(pkt->metadata.in_port, ewma_stat, sizeof(struct ewma_stats),pkt->metadata.in_port);
 
         //
         ewma_stat->lasttime = pkt->metadata.sec;

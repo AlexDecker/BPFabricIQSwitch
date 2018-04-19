@@ -57,7 +57,7 @@ uint64_t prog(struct packet *pkt)
     if (st->counter % 64 == 0) {
         uint64_t *first;
         bpf_map_lookup_elem(&interarrival, &zero, &first);
-        bpf_notify(0, first, NBUCKETS*sizeof(uint64_t));
+        bpf_notify(0, first, NBUCKETS*sizeof(uint64_t),pkt->metadata.in_port);
     }
 
     // Learning Switch

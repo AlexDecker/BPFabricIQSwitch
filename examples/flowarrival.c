@@ -52,7 +52,7 @@ uint64_t prog(struct packet *pkt)
                 }
 
                 if (pkt->metadata.sec - astats->lasttime > 5) {
-                    bpf_notify(0, astats, sizeof(struct arrival_stats));
+                    bpf_notify(0, astats, sizeof(struct arrival_stats),pkt->metadata.in_port);
                     astats->lasttime = pkt->metadata.sec;
                     astats->arrival = 0;
                     astats->departure = 0;

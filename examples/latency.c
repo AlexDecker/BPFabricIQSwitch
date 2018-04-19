@@ -95,7 +95,7 @@ uint64_t prog(struct packet *pkt)
                     lat->ack.nsec = pkt->metadata.nsec;
 
                     //bpf_notify(0, lat, sizeof(struct tcplatency));
-                    bpf_notify(1, ((uint8_t *)lat) - sizeof(struct tcpflowtuple) - 4, sizeof(struct tcplatency) + sizeof(struct tcpflowtuple) + 4);
+                    bpf_notify(1, ((uint8_t *)lat) - sizeof(struct tcpflowtuple) - 4, sizeof(struct tcplatency) + sizeof(struct tcpflowtuple) + 4,pkt->metadata.in_port);
                     bpf_map_delete_elem(&latency, &tuple);
 
                 }
