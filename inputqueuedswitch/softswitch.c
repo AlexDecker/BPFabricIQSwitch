@@ -53,8 +53,8 @@ int setup_socket(struct port *port, char *netdev)
         exit(1);
     }
 	
-	port->nPackets = 0;
     port->fd = fd;
+	pthread_mutex_init(&(port->mutex_tx_frame), NULL);
 
     err = setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v));
     if (err < 0) {
@@ -123,14 +123,15 @@ int setup_socket(struct port *port, char *netdev)
 
 
 //liberação do mapeamento e das estruturas
-void teardown_socket(struct port *port)
-{
+void teardown_socket(struct port *port){
     munmap(port->tx_ring.map, port->tx_ring.size);
     munmap(port->rx_ring.map, port->rx_ring.size);
 
     free(port->tx_ring.rd);
     free(port->rx_ring.rd);
-
+    
+	pthread_mutex_destroy(&(port->mutex_tx_frame));
+	
     close(port->fd);
 }
 
@@ -141,7 +142,7 @@ int tx_frame(struct port* port, void *data, int len) {
     struct ring *tx_ring = &port->tx_ring;
 
     // TODO: Drop if tx queue is full? (drop-tail)
-    pthread_mutex_lock(&mutex_tx_frame);
+    pthread_mutex_lock(&(port->mutex_tx_frame));
     if (v2_tx_kernel_ready(tx_ring->rd[tx_ring->frame_num].iov_base)) {
         union frame_map ppd_out;
         ppd_out.raw = tx_ring->rd[tx_ring->frame_num].iov_base;
@@ -160,7 +161,7 @@ int tx_frame(struct port* port, void *data, int len) {
 
         ret = 0; //kernel pronto, não descarte o pacote
     }
-	pthread_mutex_unlock(&mutex_tx_frame);
+    pthread_mutex_unlock(&(port->mutex_tx_frame));
     return ret;
 }
 

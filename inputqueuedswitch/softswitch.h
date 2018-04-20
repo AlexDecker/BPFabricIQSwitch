@@ -18,6 +18,8 @@
 
 #include <time.h>
 
+#include <pthread.h>
+
 #include "ubpf.h"
 #include "multiAgent.h"
 #include "ebpf_consts.h"
@@ -40,7 +42,6 @@
 #define SOFT_SWITCH_H
 
 extern sig_atomic_t sigint;//declaração
-extern pthread_mutex_t mutex_tx_frame;
 
 struct ring {
     struct iovec *rd;//sys/uio.h. Define um buffer eficiente (não sofre swap)
@@ -52,7 +53,7 @@ struct ring {
 
 struct port {
     int fd;//identificador do socket
-	int nPackets;//número de pacotes processados desde o último poll
+	pthread_mutex_t mutex_tx_frame;//evita conflitos de transmissão na porta de saída
     struct ring rx_ring;//queue de entrada
     struct ring tx_ring;//queue de saída
 };

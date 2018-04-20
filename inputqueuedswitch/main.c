@@ -92,14 +92,12 @@ static struct argp argp = { options, parse_opt, args_doc, doc };
 static void voidhandler(int num) {} // NOTE: do nothing prevent mininet from killing the softswitch
 
 sig_atomic_t sigint;//definição
-pthread_mutex_t mutex_tx_frame;
 
 void sighandler(int num){sigint = 1;}
 
 int main(int argc, char **argv){
 
 	sigint = 0;//agora é extern, então a definição no ato de declaração causa conflitos.
-	pthread_mutex_init(&mutex_tx_frame, NULL);
 		
     int i;
 
@@ -195,7 +193,6 @@ int main(int argc, char **argv){
 	free(pfds);
 	free(ubpf_fn);
 	pthread_mutex_destroy(&(ctrl->mutex_nReady));
-	pthread_mutex_destroy(&mutex_tx_frame);
     agent_stop();
 	
     printf("Terminating ...\n");
