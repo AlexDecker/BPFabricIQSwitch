@@ -173,7 +173,9 @@ int main(int argc, char **argv){
 		//criando a thread responsável por esta porta de entrada
 		if(pthread_create(&tid, NULL, commonDataPath,&cArg[i])){
 			printf("Error while creating a common datapath.\n");
-		}
+		}/*else if(!pthread_setschedprio(tid,99)){
+			printf("Cannot set thread priority\n");
+		}*/
 	}
 	
 	//cria a thread com o caminho de dados principal
@@ -184,7 +186,9 @@ int main(int argc, char **argv){
 	mArg->pfds = pfds;
     if(pthread_create(&tid, NULL, mainBPFabricPath, mArg)){
     	printf("Error while creating the main datapath.\n");
-    }
+    }/*else if(!pthread_setschedprio(tid,99)){
+			printf("Cannot set thread priority\n");
+	}*/
 
     /* House keeping */
 	pthread_exit(NULL);//trocar por um for e pthread_join
