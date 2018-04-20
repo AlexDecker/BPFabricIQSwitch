@@ -9,7 +9,7 @@ static inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
 
 switchCtrlReg* createControlRegisters(){
 	switchCtrlReg* ctrl = (switchCtrlReg*) malloc(sizeof(switchCtrlReg));
-	pthread_mutex_init(&(ctrl->mutex), NULL);
+	pthread_mutex_init(&(ctrl->mutex_nReady), NULL);
 	ctrl->nReady = 0;
 	ctrl->preparingfase=false;
 	return ctrl;
@@ -71,15 +71,15 @@ void* mainBPFabricPath(void* arg){
 void* commonDataPath(void* arg){
 	commonPathArg* Arg = (commonPathArg*) arg;
 	while (likely(!sigint)) {
-		pthread_mutex_lock(&(Arg->ctrl->mutex));
 		if(!(Arg->ctrl->preparingfase)&&!(Arg->imReady)){
 			datapathEngine(arg);
-			//Depois criar uma seção crítica aqui
+			
+			pthread_mutex_lock(&(Arg->ctrl->mutex_nReady));
 			Arg->ctrl->nReady++;
-			///
+			pthread_mutex_unlock(&(Arg->ctrl->mutex_nReady));
+						
 			Arg->imReady = true;
 		}
-		pthread_mutex_unlock(&(Arg->ctrl->mutex));
 		sched_yield();
 	}
 	pthread_exit(NULL);

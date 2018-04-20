@@ -431,7 +431,7 @@ int recv_packet_out(void *buffer, Header *header, int i) {
     return len;
 }
 
-const handler handlers[] = {//olhar como fica essa parte (para adicionar o i)
+const handler handlers[] = {
     [HEADER__TYPE__HELLO] = recv_hello,
     [HEADER__TYPE__INSTALL_REQUEST] = recv_install,
     [HEADER__TYPE__TABLES_LIST_REQUEST] = recv_tables_list_request,
@@ -607,7 +607,7 @@ void *agent_task(void* portNum){
         }
 
         perror("unable to connect to the controller");
-        sleep(5);//trocar por sched_yield
+        sleep(5);
     }
 	free(portNum);
     pthread_exit(NULL);

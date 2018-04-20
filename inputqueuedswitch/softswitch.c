@@ -136,25 +136,18 @@ void teardown_socket(struct port *port)
 
 //envia um frame pela porta de saída correta
 int tx_frame(struct port* port, void *data, int len) {
+	int ret = -1;
     // add the packet to the port tx queue
     struct ring *tx_ring = &port->tx_ring;
 
     // TODO: Drop if tx queue is full? (drop-tail)
+    pthread_mutex_lock(&mutex_tx_frame);
     if (v2_tx_kernel_ready(tx_ring->rd[tx_ring->frame_num].iov_base)) {
         union frame_map ppd_out;
         ppd_out.raw = tx_ring->rd[tx_ring->frame_num].iov_base;
-
-        // copy the packet from ppd to ppd_out
-        // ppd_out.v2->tp_h.tp_snaplen = ppd.v2->tp_h.tp_snaplen;
-        // ppd_out.v2->tp_h.tp_len = ppd.v2->tp_h.tp_len;
+        
         ppd_out.v2->tp_h.tp_snaplen = len;
         ppd_out.v2->tp_h.tp_len = len;
-
-        // printf("start pointer: %p  tp_mac offset: %d  hdrlen: %d  sockadd_ll: %d\n", ppd.raw, ppd.v2->tp_h.tp_mac, TPACKET2_HDRLEN, sizeof(struct sockaddr_ll));
-
-        // Can this be zerocopy too? I guess not with the fixed allocation of rings
-        // assert(ppd.v2->tp_h.tp_len == ppd.v2->tp_h.tp_snaplen);
-        // printf("ppd_out.tp_mac %d\n", ppd_out.v2->tp_h.tp_mac);
 
         memcpy((uint8_t *) ppd_out.raw + TPACKET2_HDRLEN - sizeof(struct sockaddr_ll),
             (uint8_t *) data,
@@ -165,10 +158,10 @@ int tx_frame(struct port* port, void *data, int len) {
         //
         tx_ring->frame_num = (tx_ring->frame_num + 1) % tx_ring->req.tp_frame_nr;
 
-        return 0;
+        ret = 0; //kernel pronto, não descarte o pacote
     }
-
-    return -1; // Kernel not ready, dropping the packet
+	pthread_mutex_unlock(&mutex_tx_frame);
+    return ret;
 }
 
 //gera um id aleatório para o plano de dados

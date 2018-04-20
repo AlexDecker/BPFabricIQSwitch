@@ -11,7 +11,7 @@
 	//estrutura utilizada para sincronizar as threads
 	typedef struct{
 			bool preparingfase;
-			pthread_mutex_t mutex;
+			pthread_mutex_t mutex_nReady;//protege o incremento de nReady
 			int nReady;//número de threads que aguardam um poll
 	}switchCtrlReg;
 
