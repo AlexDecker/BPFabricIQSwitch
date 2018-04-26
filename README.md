@@ -1,2 +1,2 @@
 # BPFabricIQSwitch
-BPFabric code with Input-Queued Switches support
+BPFabric code with parallel datapath
