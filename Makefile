@@ -34,5 +34,5 @@ clean:
 	cd inputqueuedswitch && $(MAKE) clean
 	cd examples && $(MAKE) clean
 ifdef RTE_SDK
-  cd dpdkswitch && $(MAKE) clean
+	cd dpdkswitch && $(MAKE) clean
 endif
