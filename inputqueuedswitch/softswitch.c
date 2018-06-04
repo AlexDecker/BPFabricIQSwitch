@@ -1,9 +1,5 @@
 #include "softswitch.h"
 
-static inline int v2_tx_kernel_ready(struct tpacket2_hdr *hdr){
-    return !(hdr->tp_status & (TP_STATUS_SEND_REQUEST | TP_STATUS_SENDING));}
-
-
 //configura o ring e o mapeamento PACKET_MMAP
 int setup_ring(int fd, struct ring* ring, int ring_type)
 {
@@ -55,6 +51,7 @@ int setup_socket(struct port *port, char *netdev)
 	
     port->fd = fd;
 	pthread_mutex_init(&(port->mutex_tx_frame), NULL);
+	port->framesWaiting = 0;
 
     err = setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v));
     if (err < 0) {
@@ -141,26 +138,43 @@ int tx_frame(struct port* port, void *data, int len) {
     // add the packet to the port tx queue
     struct ring *tx_ring = &port->tx_ring;
 
-    // TODO: Drop if tx queue is full? (drop-tail)
     pthread_mutex_lock(&(port->mutex_tx_frame));
-    if (v2_tx_kernel_ready(tx_ring->rd[tx_ring->frame_num].iov_base)) {
-        union frame_map ppd_out;
-        ppd_out.raw = tx_ring->rd[tx_ring->frame_num].iov_base;
-        
-        ppd_out.v2->tp_h.tp_snaplen = len;
-        ppd_out.v2->tp_h.tp_len = len;
+    
+		struct tpacket2_hdr *hdr = tx_ring->rd[tx_ring->frame_num].iov_base;
+		
+		if (hdr->tp_status & TP_STATUS_SEND_REQUEST) {
+			//o ring encheu
+			send(port->fd, NULL, 0, MSG_DONTWAIT);
+			printf("Regular send\n");
+			port->framesWaiting = 0;
+		}else if (hdr->tp_status & TP_STATUS_SENDING){
+			//descarte o quadro
+		}else{
+		    union frame_map ppd_out;
+		    ppd_out.raw = hdr;
+		    
+		    ppd_out.v2->tp_h.tp_snaplen = len;
+		    ppd_out.v2->tp_h.tp_len = len;
 
-        memcpy((uint8_t *) ppd_out.raw + TPACKET2_HDRLEN - sizeof(struct sockaddr_ll),
-            (uint8_t *) data,
-            len);
+		    memcpy((uint8_t *) ppd_out.raw + TPACKET2_HDRLEN - sizeof(struct sockaddr_ll),
+		        (uint8_t *) data,
+		        len);
 
-        ppd_out.v2->tp_h.tp_status = TP_STATUS_SEND_REQUEST;
+		    ppd_out.v2->tp_h.tp_status = TP_STATUS_SEND_REQUEST;
 
-        //
-        tx_ring->frame_num = (tx_ring->frame_num + 1) % tx_ring->req.tp_frame_nr;
+		    //
+		    tx_ring->frame_num = (tx_ring->frame_num + 1) % tx_ring->req.tp_frame_nr;
 
-        ret = 0; //kernel pronto, não descarte o pacote
-    }
+		    ret = 0; //kernel pronto, não descarte o pacote
+		    port->framesWaiting++;
+		    
+		    if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/5){
+		    	port->framesWaiting = 0;
+		    	send(port->fd, NULL, 0, MSG_DONTWAIT);
+				printf("Regular send\n");
+		    }
+		}
+    
     pthread_mutex_unlock(&(port->mutex_tx_frame));
     return ret;
 }

@@ -56,6 +56,7 @@ struct port {
 	pthread_mutex_t mutex_tx_frame;//evita conflitos de transmissão na porta de saída
     struct ring rx_ring;//queue de entrada
     struct ring tx_ring;//queue de saída
+    int framesWaiting;//número de quadros esperando por send
 };
 
 struct dataplane {

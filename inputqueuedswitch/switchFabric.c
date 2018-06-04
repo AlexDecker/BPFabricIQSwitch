@@ -55,6 +55,7 @@ void* mainBPFabricPath(void* arg){
 		    // Send all the pendings packets for each interface
 		    for (i = 0; i < dataplane.port_count; i++) {
 		        send(dataplane.ports[i].fd, NULL, 0, MSG_DONTWAIT);
+		        printf("Outside send\n");
 		        Arg->allCommonPaths[i].imReady = false;
 		    }
 

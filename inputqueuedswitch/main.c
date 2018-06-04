@@ -159,7 +159,7 @@ int main(int argc, char **argv){
 		printf("Error while allocating datapath registers");
 	}
 	
-	pthread_t tid;
+	pthread_t tid[dataplane.port_count];
 	
     switchCtrlReg* ctrl = createControlRegisters();
 	
@@ -171,7 +171,7 @@ int main(int argc, char **argv){
 		cArg[i].imReady = false;
 		cArg[i].ubpf_fn = ubpf_fn+i;//ponteiro da função do agente eBPF
 		//criando a thread responsável por esta porta de entrada
-		if(pthread_create(&tid, NULL, commonDataPath,&cArg[i])){
+		if(pthread_create(&(tid[i]), NULL, commonDataPath,&cArg[i])){
 			printf("Error while creating a common datapath.\n");
 		}/*else if(!pthread_setschedprio(tid,99)){
 			printf("Cannot set thread priority\n");
@@ -179,19 +179,24 @@ int main(int argc, char **argv){
 	}
 	
 	//cria a thread com o caminho de dados principal
+	pthread_t tid_m;
 	mainPathArg* mArg = (mainPathArg*) malloc(sizeof(mainPathArg));
     mArg->ctrl = ctrl;
 	mArg->nPorts = dataplane.port_count;
 	mArg->allCommonPaths = cArg;
 	mArg->pfds = pfds;
-    if(pthread_create(&tid, NULL, mainBPFabricPath, mArg)){
+    if(pthread_create(&tid_m, NULL, mainBPFabricPath, mArg)){
     	printf("Error while creating the main datapath.\n");
     }/*else if(!pthread_setschedprio(tid,99)){
 			printf("Cannot set thread priority\n");
 	}*/
 
     /* House keeping */
-	pthread_exit(NULL);//trocar por um for e pthread_join
+	for (i = 0; i < dataplane.port_count; i++) {
+		pthread_join(tid[i],NULL);
+	}
+	pthread_join(tid_m,NULL);
+	
 	free(cArg);
 	free(mArg);
 	free(pfds);
