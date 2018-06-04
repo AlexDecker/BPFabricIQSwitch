@@ -187,13 +187,18 @@ int main(int argc, char **argv){
 	free(cArg);
 	free(pfds);
 	free(ubpf_fn);
-	pthread_mutex_destroy(&(ctrl->mutex_nReady));
+	
     agent_stop();
 	
     printf("Terminating ...\n");
     for (i = 0; i < dataplane.port_count; i++) {
+    	pthread_mutex_destroy((ctrl->mutex_forward_map)+i);
+    	free(ctrl->forwardingMap[i]);
         teardown_socket(&dataplane.ports[i]);
     }
-
+	
+	free(ctrl->forwardingMap);
+	free(ctrl->polling);
+	
     return 0;
 }

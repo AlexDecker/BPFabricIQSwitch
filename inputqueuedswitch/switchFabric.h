@@ -10,9 +10,14 @@
 
 	//estrutura utilizada para sincronizar as threads
 	typedef struct{
-			bool preparingfase;
-			pthread_mutex_t mutex_nReady;//protege o incremento de nReady
-			int nReady;//número de threads que aguardam um poll
+			pthread_mutex_t* mutex_forward_map;//protege cada linha do mapa
+			unsigned int** forwardingMap;//estrutura para estimar quanto do fluxo que passa por cada
+			//porta de entrada (linha) vai para cada porta de saída (coluna)
+			pthread_mutex_t mutex_total_sum;//proteje a variável abaixo
+			long long int totalSum;//soma total dos valores da estrutura (denominador da razão
+			//de probabilidade
+			bool* polling;//vetor de flags sinalizadas pelo próprio caminho de dados indicando que o mesmo
+			//está realizando poll
 	}switchCtrlReg;
 
 	switchCtrlReg* createControlRegisters();
