@@ -27,19 +27,6 @@
 			ubpf_jit_fn* ubpf_fn;//ponteiro do ponteiro da função do agente eBPF
 			struct pollfd* pfd;
 	}commonPathArg;
-	
-	//argumentos necessários para a operação do caminho de dados
-	//principal (que atua sobre todo o fabric)
-	typedef struct{
-        	switchCtrlReg* ctrl;
-			int nPorts;
-			commonPathArg* allCommonPaths;
-			struct pollfd* pfds;
-	}mainPathArg;
-
-	void datapathEngine(void* arg);
-
-	void* mainBPFabricPath(void* arg);
 
 	void* commonDataPath(void* arg);
 

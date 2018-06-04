@@ -145,7 +145,6 @@ int tx_frame(struct port* port, void *data, int len) {
 		if (hdr->tp_status & TP_STATUS_SEND_REQUEST) {
 			//o ring encheu
 			send(port->fd, NULL, 0, MSG_DONTWAIT);
-			printf("Regular send\n");
 			port->framesWaiting = 0;
 		}else if (hdr->tp_status & TP_STATUS_SENDING){
 			//descarte o quadro
@@ -168,11 +167,10 @@ int tx_frame(struct port* port, void *data, int len) {
 		    ret = 0; //kernel pronto, não descarte o pacote
 		    port->framesWaiting++;
 		    
-		    if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/5){
+		    //if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/5){
 		    	port->framesWaiting = 0;
 		    	send(port->fd, NULL, 0, MSG_DONTWAIT);
-				printf("Regular send\n");
-		    }
+		    //}
 		}
     
     pthread_mutex_unlock(&(port->mutex_tx_frame));

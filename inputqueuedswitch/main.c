@@ -147,8 +147,8 @@ int main(int argc, char **argv){
 	
 	for (i = 0; i < dataplane.port_count; i++) {
 		options[i].dpid = dataplane.dpid + i<<32;//dataplane virtual com uma porta, para
-		options[i].controller = arguments.controller;
 		//facilitar a identificação do agente eBPF
+		options[i].controller = arguments.controller;
 	    agent_start(ubpf_fn+i, (tx_packet_fn)transmit, options+i, i, dataplane.port_count);
 	}
 	
@@ -170,6 +170,7 @@ int main(int argc, char **argv){
 		cArg[i].portNumber = i;
 		cArg[i].imReady = false;
 		cArg[i].ubpf_fn = ubpf_fn+i;//ponteiro da função do agente eBPF
+		cArg[i].pfd = pfds+i;
 		//criando a thread responsável por esta porta de entrada
 		if(pthread_create(&(tid[i]), NULL, commonDataPath,&cArg[i])){
 			printf("Error while creating a common datapath.\n");
@@ -178,27 +179,12 @@ int main(int argc, char **argv){
 		}*/
 	}
 	
-	//cria a thread com o caminho de dados principal
-	pthread_t tid_m;
-	mainPathArg* mArg = (mainPathArg*) malloc(sizeof(mainPathArg));
-    mArg->ctrl = ctrl;
-	mArg->nPorts = dataplane.port_count;
-	mArg->allCommonPaths = cArg;
-	mArg->pfds = pfds;
-    if(pthread_create(&tid_m, NULL, mainBPFabricPath, mArg)){
-    	printf("Error while creating the main datapath.\n");
-    }/*else if(!pthread_setschedprio(tid,99)){
-			printf("Cannot set thread priority\n");
-	}*/
-
     /* House keeping */
 	for (i = 0; i < dataplane.port_count; i++) {
 		pthread_join(tid[i],NULL);
 	}
-	pthread_join(tid_m,NULL);
 	
 	free(cArg);
-	free(mArg);
 	free(pfds);
 	free(ubpf_fn);
 	pthread_mutex_destroy(&(ctrl->mutex_nReady));
