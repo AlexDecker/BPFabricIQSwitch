@@ -168,7 +168,6 @@ int main(int argc, char **argv){
 		//a essa thread
         cArg[i].ctrl = ctrl;
 		cArg[i].portNumber = i;
-		cArg[i].imReady = false;
 		cArg[i].ubpf_fn = ubpf_fn+i;//ponteiro da função do agente eBPF
 		cArg[i].pfd = pfds+i;
 		//criando a thread responsável por esta porta de entrada
@@ -198,7 +197,7 @@ int main(int argc, char **argv){
     }
 	
 	free(ctrl->forwardingMap);
-	free(ctrl->polling);
+	free(ctrl->active);
 	
     return 0;
 }

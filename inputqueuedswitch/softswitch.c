@@ -52,6 +52,7 @@ int setup_socket(struct port *port, char *netdev)
     port->fd = fd;
 	pthread_mutex_init(&(port->mutex_tx_frame), NULL);
 	port->framesWaiting = 0;
+	port->oldestFrameTime.valid=false;
 
     err = setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v));
     if (err < 0) {
@@ -134,44 +135,51 @@ void teardown_socket(struct port *port){
 
 //envia um frame pela porta de saída correta
 int tx_frame(struct port* port, void *data, int len) {
-	int ret = -1;
+	int ret = 0;
     // add the packet to the port tx queue
     struct ring *tx_ring = &port->tx_ring;
 
     pthread_mutex_lock(&(port->mutex_tx_frame));
     
-		struct tpacket2_hdr *hdr = tx_ring->rd[tx_ring->frame_num].iov_base;
-		
-		if (hdr->tp_status & TP_STATUS_SEND_REQUEST) {
-			//o ring encheu
-			send(port->fd, NULL, 0, MSG_DONTWAIT);
-			port->framesWaiting = 0;
-		}else if (hdr->tp_status & TP_STATUS_SENDING){
-			//descarte o quadro
-		}else{
-		    union frame_map ppd_out;
-		    ppd_out.raw = hdr;
-		    
-		    ppd_out.v2->tp_h.tp_snaplen = len;
-		    ppd_out.v2->tp_h.tp_len = len;
+	struct tpacket2_hdr *hdr = tx_ring->rd[tx_ring->frame_num].iov_base;
+	
+	if (hdr->tp_status & TP_STATUS_SEND_REQUEST) {
+		//o ring encheu, envie (caso possível, porém não desejado)
+		send(port->fd, NULL, 0, MSG_DONTWAIT);
+		port->framesWaiting = 0;
+		port->oldestFrameTime.valid=false;
+	}else if (hdr->tp_status & TP_STATUS_SENDING){
+		//descarte o quadro
+	}else{
+	
+	    union frame_map ppd_out;
+	    ppd_out.raw = hdr;
+	    
+	    ppd_out.v2->tp_h.tp_snaplen = len;
+	    ppd_out.v2->tp_h.tp_len = len;
 
-		    memcpy((uint8_t *) ppd_out.raw + TPACKET2_HDRLEN - sizeof(struct sockaddr_ll),
-		        (uint8_t *) data,
-		        len);
+	    memcpy((uint8_t *) ppd_out.raw + TPACKET2_HDRLEN - sizeof(struct sockaddr_ll),
+	        (uint8_t *) data,
+	        len);
 
-		    ppd_out.v2->tp_h.tp_status = TP_STATUS_SEND_REQUEST;
+	    ppd_out.v2->tp_h.tp_status = TP_STATUS_SEND_REQUEST;
 
-		    //
-		    tx_ring->frame_num = (tx_ring->frame_num + 1) % tx_ring->req.tp_frame_nr;
+	    //
+	    tx_ring->frame_num = (tx_ring->frame_num + 1) % tx_ring->req.tp_frame_nr;
 
-		    ret = 0; //kernel pronto, não descarte o pacote
-		    port->framesWaiting++;
-		    
-		    //if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/5){
-		    	port->framesWaiting = 0;
-		    	send(port->fd, NULL, 0, MSG_DONTWAIT);
-		    //}
-		}
+	    ret = 1; //kernel pronto, não descarte o pacote
+	    port->framesWaiting++;
+	    
+	    //if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/2){
+	    	//se começar a encher a fila, envie (possível, porém não desejado)
+	    	send(port->fd, NULL, 0, MSG_DONTWAIT);
+	    	port->framesWaiting = 0;
+	    	port->oldestFrameTime.valid=false;
+	    /*}else if(!port->oldestFrameTime.valid){
+	    	//o frame que acabou de ser enviado é agora o mais antigo em TP_STATUS_SEND_REQUEST
+	    	clock_gettime(CLOCK_MONOTONIC,&(port->oldestFrameTime.t));
+	    }*/
+	}
     
     pthread_mutex_unlock(&(port->mutex_tx_frame));
     return ret;
@@ -187,7 +195,8 @@ unsigned long long random_dpid() {
 
 //executa uma ação sobre um pacote
 // flags is the hack to force transmission
-void transmit(struct metadatahdr *buf, int len, uint32_t port, int flags) {
+int transmit(struct metadatahdr *buf, int len, uint32_t port, int flags) {
+	int ret=0;
     int i;
     void *eth_frame = (uint8_t *)buf + sizeof(struct metadatahdr);
     int eth_len = len - sizeof(struct metadatahdr);
@@ -198,7 +207,7 @@ void transmit(struct metadatahdr *buf, int len, uint32_t port, int flags) {
             for (i = 0; i < dataplane.port_count; i++) {
                 if (i != buf->in_port) {
                     // printf("sending frame from port %d to port %d on switch %llu\n", buf->in_port, i, dataplane.dpid);
-                    tx_frame(&dataplane.ports[i], eth_frame, eth_len);
+                    ret+=tx_frame(&dataplane.ports[i], eth_frame, eth_len);
                 }
             }
 			
@@ -226,6 +235,7 @@ void transmit(struct metadatahdr *buf, int len, uint32_t port, int flags) {
         default:
             // printf("Forwarding the packet\n");
             // printf("in_port %d out_port %lu data_len %lu\n", buf->in_port, port, len - sizeof(struct metadatahdr));
-            tx_frame(&dataplane.ports[port], eth_frame, eth_len);
+            ret+=tx_frame(&dataplane.ports[port], eth_frame, eth_len);
     }
+    return ret;
 }

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 #include <net/if.h>
@@ -43,6 +44,13 @@
 
 extern sig_atomic_t sigint;//declaração
 
+//estrutura utilizada para o timeout das chamadas de send
+typedef struct{
+		struct timespec t;//marca o tempo em que o frame mais antigo que ainda está no
+		//ring chegou
+		bool valid;//indica se o valor deve ser atualizado quando o próximo frame chegar
+}timeCounter;
+
 struct ring {
     struct iovec *rd;//sys/uio.h. Define um buffer eficiente (não sofre swap)
     uint8_t *map;//mapeamento (retorno da função mmap)
@@ -57,6 +65,8 @@ struct port {
     struct ring rx_ring;//queue de entrada
     struct ring tx_ring;//queue de saída
     int framesWaiting;//número de quadros esperando por send
+    timeCounter oldestFrameTime;//marca o tempo em que o frame mais antigo que ainda está no
+	//tx_ring chegou
 };
 
 struct dataplane {
@@ -89,7 +99,9 @@ int tx_frame(struct port* port, void *data, int len);
 
 //gera um id aleatório para o plano de dados
 unsigned long long random_dpid();
+
 //executa uma ação sobre um pacote
-// flags is the hack to force transmission
-void transmit(struct metadatahdr *buf, int len, uint32_t port, int flags);
+// (flags is the hack to force transmission)
+//retorna quantos quadros foram transmitidos
+int transmit(struct metadatahdr *buf, int len, uint32_t port, int flags);
 #endif
