@@ -50,13 +50,30 @@ void* commonDataPath(void* arg){
 		double dt = now.tv_sec - Arg->port->oldestFrameTime.t.tv_sec;
 		dt += (now.tv_nsec - Arg->port->oldestFrameTime.t.tv_nsec)/1000000000.0;
 		
-		//se tiver estourado o timeout (possível, porém não desejado)
-		if((Arg->port->oldestFrameTime.valid)&&(dt>SEND_TIMEOUT)){
-			sendBurst(Arg->port);
-		}else{
-			//caso desejável para a chamada send: quando não há frames destinados a essa porta.
+		//Se tiver coisa para mandar
+		if(Arg->port->oldestFrameTime.valid){
+			//se tiver estourado o timeout (possível, porém não desejado)
+			if(dt>SEND_TIMEOUT){
+				sendBurst(Arg->port);
+			}else{
+				//caso desejável para a chamada send: quando não há frames destinados a essa porta.
+				double p = 0;
+				
+				//calculando a probabilidade de uso desta porta no próximo intervalo de tempo
+				for (j = 0; j < dataplane.port_count; j++) {
+					if(Arg->ctrl->active[Arg->portNumber]){
+						p+=Arg->ctrl->forwardingMap[j][Arg->portNumber];
+					}
+				}
+				pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
+					p/=Arg->ctrl->totalSum;
+				pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
+				
+				if(p<SEND_THRESHOLD){
+					sendBurst(Arg->port);
+				}
+			}
 		}
-		
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//sinalizando que o datapath vai voltar à ativa
 			Arg->ctrl->active[Arg->portNumber] = true;
@@ -132,7 +149,7 @@ void* commonDataPath(void* arg){
 					//divide todo o mapa por 2 (o que mantém a proporção entre as células
 					for (i = 0; i < dataplane.port_count; i++) {
 						for (j = 0; j < dataplane.port_count; j++) {
-							Arg->ctrl->forwardingMap[i][j]/=2;
+							Arg->ctrl->forwardingMap[i][j]=Arg->ctrl->forwardingMap[i][j]>>2;
 						}
 					}
 			

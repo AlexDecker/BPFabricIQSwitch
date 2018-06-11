@@ -3,5 +3,6 @@
 
 	#define SIZE_DIVIDER 4
 	#define SEND_TIMEOUT 0.1
+	#define SEND_THRESHOLD 0.5
 
 #endif
