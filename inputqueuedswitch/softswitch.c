@@ -53,6 +53,8 @@ int setup_socket(struct port *port, char *netdev)
 	pthread_mutex_init(&(port->mutex_tx_frame), NULL);
 	port->framesWaiting = 0;
 	port->oldestFrameTime.valid=false;
+	
+	clock_gettime(CLOCK_MONOTONIC,&(port->oldestFrameTime.t));
 
     err = setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v));
     if (err < 0) {
@@ -145,9 +147,7 @@ int tx_frame(struct port* port, void *data, int len) {
 	
 	if (hdr->tp_status & TP_STATUS_SEND_REQUEST) {
 		//o ring encheu, envie (caso possível, porém não desejado)
-		send(port->fd, NULL, 0, MSG_DONTWAIT);
-		port->framesWaiting = 0;
-		port->oldestFrameTime.valid=false;
+		sendBurst(port);
 	}else if (hdr->tp_status & TP_STATUS_SENDING){
 		//descarte o quadro
 	}else{
@@ -170,19 +170,24 @@ int tx_frame(struct port* port, void *data, int len) {
 	    ret = 1; //kernel pronto, não descarte o pacote
 	    port->framesWaiting++;
 	    
-	    //if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/2){
+	    if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/2){
 	    	//se começar a encher a fila, envie (possível, porém não desejado)
-	    	send(port->fd, NULL, 0, MSG_DONTWAIT);
-	    	port->framesWaiting = 0;
-	    	port->oldestFrameTime.valid=false;
-	    /*}else if(!port->oldestFrameTime.valid){
+	    	sendBurst(port);
+	    }else if(!port->oldestFrameTime.valid){
 	    	//o frame que acabou de ser enviado é agora o mais antigo em TP_STATUS_SEND_REQUEST
 	    	clock_gettime(CLOCK_MONOTONIC,&(port->oldestFrameTime.t));
-	    }*/
+	    	port->oldestFrameTime.valid = true;
+	    }
 	}
     
     pthread_mutex_unlock(&(port->mutex_tx_frame));
     return ret;
+}
+
+void sendBurst(struct port* port){
+	send(port->fd, NULL, 0, MSG_DONTWAIT);
+	port->framesWaiting = 0;
+	port->oldestFrameTime.valid=false;
 }
 
 //gera um id aleatório para o plano de dados
@@ -217,7 +222,7 @@ int transmit(struct metadatahdr *buf, int len, uint32_t port, int flags) {
             // therefore delay the packet transmission until the next packet is received
             if (flags) {
                 for (i = 0; i < dataplane.port_count; i++) {
-                    send(dataplane.ports[i].fd, NULL, 0, MSG_DONTWAIT);
+                    sendBurst(dataplane.ports+i);
                 }
             }
 

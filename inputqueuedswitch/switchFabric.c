@@ -40,23 +40,22 @@ void* commonDataPath(void* arg){
 	ubpf_jit_fn agent;
 	struct metadatahdr* metadatahdr;
 	uint64_t ret;
+	struct timespec now;
 	
 	while (likely(!sigint)) {
 		//avalia a possibilidade de efetuar um send aqui (apenas sobre o tx_ring dessa porta)
-		/*struct timespec now;
 		clock_gettime(CLOCK_MONOTONIC,&now);
 		
 		//calcula quanto que o frame mais antigo do ring já esperou
 		double dt = now.tv_sec - Arg->port->oldestFrameTime.t.tv_sec;
 		dt += (now.tv_nsec - Arg->port->oldestFrameTime.t.tv_nsec)/1000000000.0;
 		
-		if(dt>SEND_TIMEOUT){//se tiver estourado o timeout (possível, porém não desejado)
-			send(Arg->port->fd, NULL, 0, MSG_DONTWAIT);
-	    	Arg->port->framesWaiting = 0;
-	    	Arg->port->oldestFrameTime.valid=false;
+		//se tiver estourado o timeout (possível, porém não desejado)
+		if((Arg->port->oldestFrameTime.valid)&&(dt>SEND_TIMEOUT)){
+			sendBurst(Arg->port);
 		}else{
 			//caso desejável para a chamada send: quando não há frames destinados a essa porta.
-		}*/
+		}
 		
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//sinalizando que o datapath vai voltar à ativa

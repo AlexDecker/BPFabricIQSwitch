@@ -97,6 +97,9 @@ void teardown_socket(struct port *port);
 //envia um frame pela porta de saída correta
 int tx_frame(struct port* port, void *data, int len);
 
+//envia todos os frames marcados com REQUEST TO SEND de uma port
+void sendBurst(struct port* port);
+
 //gera um id aleatório para o plano de dados
 unsigned long long random_dpid();
 

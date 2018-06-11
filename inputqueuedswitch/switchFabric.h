@@ -29,7 +29,7 @@
 	//dedicados a cada porta de entrada
 	typedef struct{
         	switchCtrlReg* ctrl;//dá acesso ao registro de controle
-	        int portNumber;//identificandor da porta
+	        int portNumber;//identificador da porta
 			struct port* port;
 			ubpf_jit_fn* ubpf_fn;//ponteiro do ponteiro da função do agente eBPF
 			struct pollfd* pfd;
