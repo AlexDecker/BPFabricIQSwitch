@@ -63,11 +63,19 @@
 	struct port {
 		int fd;//identificador do socket
 		pthread_mutex_t mutex_tx_frame;//evita conflitos de transmissão na porta de saída
+		//
 		struct ring rx_ring;//queue de entrada
 		struct ring tx_ring;//queue de saída
+		//
 		int framesWaiting;//número de quadros esperando por send
 		timeCounter oldestFrameTime;//marca o tempo em que o frame mais antigo que ainda está no
 		//tx_ring chegou
+		//
+		long long int droppedFrames;//número de quadros descartados desde a última chamada a send
+		long long int droppedFrames_old;//último valor de droppedFrames
+		double sendThreshold;//threshold utilizado para decidir se uma chamada a send() é apropriada
+		//no presente momento
+		double sendThreshold_old;//último valor de sendThreshold
 	};
 
 	struct dataplane {

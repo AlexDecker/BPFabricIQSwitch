@@ -69,7 +69,7 @@ void* commonDataPath(void* arg){
 					p/=Arg->ctrl->totalSum;
 				pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
 				
-				if(p<SEND_THRESHOLD){
+				if(p < Arg->port->sendThreshold){
 					sendBurst(Arg->port);
 				}
 			}

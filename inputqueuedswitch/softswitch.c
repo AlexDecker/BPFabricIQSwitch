@@ -55,6 +55,11 @@ int setup_socket(struct port *port, char *netdev)
 	port->oldestFrameTime.valid=false;
 	
 	clock_gettime(CLOCK_MONOTONIC,&(port->oldestFrameTime.t));
+	
+	port->droppedFrames = -1;
+	port->droppedFrames_old = -1;
+	port->sendThreshold = SEND_THRESHOLD_0;
+	port->sendThreshold_old = SEND_THRESHOLD_0;
 
     err = setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v));
     if (err < 0) {
@@ -186,8 +191,16 @@ int tx_frame(struct port* port, void *data, int len) {
 
 void sendBurst(struct port* port){
 	send(port->fd, NULL, 0, MSG_DONTWAIT);
+	
+	double newThreshold = 0.5;
+	
 	port->framesWaiting = 0;
 	port->oldestFrameTime.valid=false;
+	
+	port->droppedFrames_old = port->droppedFrames;
+	port->droppedFrames = 0;
+	port->sendThreshold_old = port->sendThreshold;
+	port->sendThreshold = newThreshold;
 }
 
 //gera um id aleatório para o plano de dados
