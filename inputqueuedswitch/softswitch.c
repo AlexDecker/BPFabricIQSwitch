@@ -170,7 +170,7 @@ int tx_frame(struct port* port, void *data, int len) {
 	    ret = 1; //kernel pronto, não descarte o pacote
 	    port->framesWaiting++;
 	    
-	    if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/2){
+	    if(port->framesWaiting == port->tx_ring.req.tp_frame_nr/SIZE_DIVIDER){
 	    	//se começar a encher a fila, envie (possível, porém não desejado)
 	    	sendBurst(port);
 	    }else if(!port->oldestFrameTime.valid){

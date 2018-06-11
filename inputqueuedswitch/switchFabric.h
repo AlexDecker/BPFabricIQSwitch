@@ -7,9 +7,8 @@
 	#include <stdlib.h>
 	#include <stdbool.h>
 	#include <time.h>
+	#include "config.h"
 	#include "softswitch.h"
-	
-	#define SEND_TIMEOUT 0.1
 	
 	//estrutura utilizada para sincronizar as threads
 	typedef struct{

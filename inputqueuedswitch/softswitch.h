@@ -24,6 +24,7 @@
 #include "ubpf.h"
 #include "multiAgent.h"
 #include "ebpf_consts.h"
+#include "config.h"
 
 #ifndef likely
     #define likely(x)        __builtin_expect(!!(x), 1)
@@ -40,71 +41,71 @@
 #endif
 
 #ifndef SOFT_SWITCH_H
-#define SOFT_SWITCH_H
+	#define SOFT_SWITCH_H
+	
+	extern sig_atomic_t sigint;//declaração
 
-extern sig_atomic_t sigint;//declaração
+	//estrutura utilizada para o timeout das chamadas de send
+	typedef struct{
+			struct timespec t;//marca o tempo em que o frame mais antigo que ainda está no
+			//ring chegou
+			bool valid;//indica se o valor deve ser atualizado quando o próximo frame chegar
+	}timeCounter;
 
-//estrutura utilizada para o timeout das chamadas de send
-typedef struct{
-		struct timespec t;//marca o tempo em que o frame mais antigo que ainda está no
-		//ring chegou
-		bool valid;//indica se o valor deve ser atualizado quando o próximo frame chegar
-}timeCounter;
+	struct ring {
+		struct iovec *rd;//sys/uio.h. Define um buffer eficiente (não sofre swap)
+		uint8_t *map;//mapeamento (retorno da função mmap)
+		struct tpacket_req req;//encapsula configurações do PACKET_MMAP
+		int size;
+		int frame_num;//número de frames (cada frame possui um pacote e um cabeçalho extra)
+	};
 
-struct ring {
-    struct iovec *rd;//sys/uio.h. Define um buffer eficiente (não sofre swap)
-    uint8_t *map;//mapeamento (retorno da função mmap)
-    struct tpacket_req req;//encapsula configurações do PACKET_MMAP
-    int size;
-    int frame_num;//número de frames (cada frame possui um pacote e um cabeçalho extra)
-};
+	struct port {
+		int fd;//identificador do socket
+		pthread_mutex_t mutex_tx_frame;//evita conflitos de transmissão na porta de saída
+		struct ring rx_ring;//queue de entrada
+		struct ring tx_ring;//queue de saída
+		int framesWaiting;//número de quadros esperando por send
+		timeCounter oldestFrameTime;//marca o tempo em que o frame mais antigo que ainda está no
+		//tx_ring chegou
+	};
 
-struct port {
-    int fd;//identificador do socket
-	pthread_mutex_t mutex_tx_frame;//evita conflitos de transmissão na porta de saída
-    struct ring rx_ring;//queue de entrada
-    struct ring tx_ring;//queue de saída
-    int framesWaiting;//número de quadros esperando por send
-    timeCounter oldestFrameTime;//marca o tempo em que o frame mais antigo que ainda está no
-	//tx_ring chegou
-};
+	struct dataplane {
+		unsigned long long dpid;//identificador do plano de dados
+		int port_count;//número de portas
+		struct port *ports;//vetor com as portas
+	} dataplane;
 
-struct dataplane {
-    unsigned long long dpid;//identificador do plano de dados
-    int port_count;//número de portas
-    struct port *ports;//vetor com as portas
-} dataplane;
+	union frame_map {//definição de um frame
+		struct {
+		    struct tpacket2_hdr tp_h __aligned_tpacket;
+		    struct sockaddr_ll s_ll __align_tpacket(sizeof(struct tpacket2_hdr));
+		} *v2;
+		void *raw;
+	};
 
-union frame_map {//definição de um frame
-    struct {
-        struct tpacket2_hdr tp_h __aligned_tpacket;
-        struct sockaddr_ll s_ll __align_tpacket(sizeof(struct tpacket2_hdr));
-    } *v2;
-    void *raw;
-};
-
-//configura o ring e o mapeamento PACKET_MMAP
-int setup_ring(int fd, struct ring* ring, int ring_type);
-
-
-//abre e configura um socket para cada par de portas de entrada/saída
-int setup_socket(struct port *port, char *netdev);
+	//configura o ring e o mapeamento PACKET_MMAP
+	int setup_ring(int fd, struct ring* ring, int ring_type);
 
 
-//liberação do mapeamento e das estruturas
-void teardown_socket(struct port *port);
+	//abre e configura um socket para cada par de portas de entrada/saída
+	int setup_socket(struct port *port, char *netdev);
 
-//envia um frame pela porta de saída correta
-int tx_frame(struct port* port, void *data, int len);
 
-//envia todos os frames marcados com REQUEST TO SEND de uma port
-void sendBurst(struct port* port);
+	//liberação do mapeamento e das estruturas
+	void teardown_socket(struct port *port);
 
-//gera um id aleatório para o plano de dados
-unsigned long long random_dpid();
+	//envia um frame pela porta de saída correta
+	int tx_frame(struct port* port, void *data, int len);
 
-//executa uma ação sobre um pacote
-// (flags is the hack to force transmission)
-//retorna quantos quadros foram transmitidos
-int transmit(struct metadatahdr *buf, int len, uint32_t port, int flags);
+	//envia todos os frames marcados com REQUEST TO SEND de uma port
+	void sendBurst(struct port* port);
+
+	//gera um id aleatório para o plano de dados
+	unsigned long long random_dpid();
+
+	//executa uma ação sobre um pacote
+	// (flags is the hack to force transmission)
+	//retorna quantos quadros foram transmitidos
+	int transmit(struct metadatahdr *buf, int len, uint32_t port, int flags);
 #endif
