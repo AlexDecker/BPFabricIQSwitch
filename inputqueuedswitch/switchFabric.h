@@ -17,7 +17,7 @@
 			//porta de entrada (linha) vai para cada porta de saída (coluna)
 			pthread_mutex_t mutex_total_sum;//proteje a variável abaixo
 			long long int totalSum;//soma total dos valores da estrutura (denominador da razão
-			//de probabilidade
+			//de probabilidade)
 			bool* active;//vetor de flags sinalizadas pelo próprio caminho de dados indicando que a
 			//porta correspondente está ativa
 	}switchCtrlReg;
@@ -29,9 +29,7 @@
 	typedef struct{
         	switchCtrlReg* ctrl;//dá acesso ao registro de controle
 	        int portNumber;//identificador da porta
-			struct port* port;
 			ubpf_jit_fn* ubpf_fn;//ponteiro do ponteiro da função do agente eBPF
-			struct pollfd* pfd;
 	}commonPathArg;
 
 	void* commonDataPath(void* arg);

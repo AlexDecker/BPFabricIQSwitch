@@ -168,9 +168,7 @@ int main(int argc, char **argv){
 		//a essa thread
         cArg[i].ctrl = ctrl;
 		cArg[i].portNumber = i;
-		cArg[i].port = dataplane.ports+i;
 		cArg[i].ubpf_fn = ubpf_fn+i;//ponteiro da função do agente eBPF
-		cArg[i].pfd = pfds+i;
 		//criando a thread responsável por esta porta de entrada
 		if(pthread_create(&(tid[i]), NULL, commonDataPath,&cArg[i])){
 			printf("Error while creating a common datapath.\n");

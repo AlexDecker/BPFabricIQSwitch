@@ -73,22 +73,24 @@ static inline void tryToSend(switchCtrlReg* ctrl, int portNumber){
 void* commonDataPath(void* arg){
 	int i,j;
 	commonPathArg* Arg = (commonPathArg*) arg;
-	struct ring *rx_ring = &dataplane.ports[Arg->portNumber].rx_ring;
+	int portNumber;
+	struct ring *rx_ring;
 	union frame_map ppd;
 	ubpf_jit_fn agent;
 	struct metadatahdr* metadatahdr;
 	uint64_t ret;
 	
 	while (likely(!sigint)) {
-		
+		portNumber = Arg->portNumber;
+		rx_ring = &dataplane.ports[portNumber].rx_ring;
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//sinalizando que o datapath vai voltar à ativa
-			Arg->ctrl->active[Arg->portNumber] = true;
+			Arg->ctrl->active[portNumber] = true;
 			
 			ppd.raw = rx_ring->rd[rx_ring->frame_num].iov_base;
 
 			metadatahdr = (struct metadatahdr *)((uint8_t *)ppd.raw + TPACKET2_HDRLEN);
-			metadatahdr->in_port = Arg->portNumber;
+			metadatahdr->in_port = portNumber;
 			metadatahdr->sec = ppd.v2->tp_h.tp_sec;
 			metadatahdr->nsec = ppd.v2->tp_h.tp_nsec;
 			metadatahdr->length = (uint16_t)ppd.v2->tp_h.tp_len;
@@ -107,13 +109,13 @@ void* commonDataPath(void* arg){
 			int ovCell = -1;//se não for -1, consiste na coluna que está prestes a sofrer overflow
 		
 			//cria uma zona crítica associada aos valores que possivelmente serão modificados
-			pthread_mutex_lock((Arg->ctrl->mutex_forward_map)+Arg->portNumber);
+			pthread_mutex_lock((Arg->ctrl->mutex_forward_map)+portNumber);
 		
 			if(ret==FLOOD){
 				for (i = 0; i < dataplane.port_count; i++) {
 					//a flag é acionada se pelo menos um registro estiver com seu valor igual ao máximo suportado pela
 					//variável
-					if(++Arg->ctrl->forwardingMap[Arg->portNumber][i]==MAXVAL_FORWARDINGMAP){
+					if(++Arg->ctrl->forwardingMap[portNumber][i]==MAXVAL_FORWARDINGMAP){
 						ovCell=i;
 					}
 				}
@@ -126,7 +128,7 @@ void* commonDataPath(void* arg){
 			}else if((ret!=CONTROLLER)&&(ret!=DROP)){
 				//a flag é acionada se o registro estiver com seu valor igual ao máximo suportado pela
 				//variável
-				if(++Arg->ctrl->forwardingMap[Arg->portNumber][ret]==MAXVAL_FORWARDINGMAP){
+				if(++Arg->ctrl->forwardingMap[portNumber][ret]==MAXVAL_FORWARDINGMAP){
 					ovCell=ret;
 				}
 			
@@ -141,7 +143,7 @@ void* commonDataPath(void* arg){
 				pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
 			}
 		
-			pthread_mutex_unlock((Arg->ctrl->mutex_forward_map)+Arg->portNumber);
+			pthread_mutex_unlock((Arg->ctrl->mutex_forward_map)+portNumber);
 		
 			if(ovCell>0){//se alguma posição está prestes a sofrer overflow
 		
@@ -151,7 +153,7 @@ void* commonDataPath(void* arg){
 				}
 			
 				//verifica novamente, desta vez em zona crítica
-				if(Arg->ctrl->forwardingMap[Arg->portNumber][ovCell]==MAXVAL_FORWARDINGMAP){
+				if(Arg->ctrl->forwardingMap[portNumber][ovCell]==MAXVAL_FORWARDINGMAP){
 			
 					//divide todo o mapa por 2 (o que mantém a proporção entre as células
 					for (i = 0; i < dataplane.port_count; i++) {
@@ -173,9 +175,9 @@ void* commonDataPath(void* arg){
 			}
 		}
 		//sinalizando que o datapath vai ficar inativo
-		Arg->ctrl->active[Arg->portNumber] = false;
+		Arg->ctrl->active[portNumber] = false;
 		//tenta enviar os frames dessa porta em rajada
-		tryToSend(Arg->ctrl, Arg->portNumber);
+		tryToSend(Arg->ctrl, portNumber);
 	}
 	pthread_exit(NULL);
 }
