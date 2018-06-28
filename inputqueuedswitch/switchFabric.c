@@ -32,6 +32,44 @@ switchCtrlReg* createControlRegisters(){
 	return ctrl;
 }
 
+//avalia se é interessante ativar o send burst para determinada porta
+static inline void tryToSend(switchCtrlReg* ctrl, int portNumber){
+	int j;
+	struct port* port = &dataplane.ports[portNumber];
+	struct timespec now;
+	
+	clock_gettime(CLOCK_MONOTONIC,&now);
+	
+	//calcula quanto que o frame mais antigo do ring já esperou
+	double dt = now.tv_sec - port->oldestFrameTime.t.tv_sec;
+	dt += (now.tv_nsec - port->oldestFrameTime.t.tv_nsec)/1000000000.0;
+	
+	//Se tiver coisa para mandar
+	if(port->oldestFrameTime.valid){
+		//se tiver estourado o timeout (possível, porém não desejado)
+		if(dt>SEND_TIMEOUT){
+			sendBurst(port);
+		}else{
+			//caso desejável para a chamada send: quando não há frames destinados a essa porta.
+			double p = 0;
+			
+			//calculando a probabilidade de uso desta porta no próximo intervalo de tempo
+			for (j = 0; j < dataplane.port_count; j++) {
+				if(ctrl->active[portNumber]){
+					p+=ctrl->forwardingMap[j][portNumber];
+				}
+			}
+			pthread_mutex_lock(&(ctrl->mutex_total_sum));
+				p/=ctrl->totalSum;
+			pthread_mutex_unlock(&(ctrl->mutex_total_sum));
+			
+			if(p < port->sendThreshold){
+				sendBurst(port);
+			}
+		}
+	}
+}
+
 void* commonDataPath(void* arg){
 	int i,j;
 	commonPathArg* Arg = (commonPathArg*) arg;
@@ -40,40 +78,9 @@ void* commonDataPath(void* arg){
 	ubpf_jit_fn agent;
 	struct metadatahdr* metadatahdr;
 	uint64_t ret;
-	struct timespec now;
 	
 	while (likely(!sigint)) {
-		//avalia a possibilidade de efetuar um send aqui (apenas sobre o tx_ring dessa porta)
-		clock_gettime(CLOCK_MONOTONIC,&now);
 		
-		//calcula quanto que o frame mais antigo do ring já esperou
-		double dt = now.tv_sec - Arg->port->oldestFrameTime.t.tv_sec;
-		dt += (now.tv_nsec - Arg->port->oldestFrameTime.t.tv_nsec)/1000000000.0;
-		
-		//Se tiver coisa para mandar
-		if(Arg->port->oldestFrameTime.valid){
-			//se tiver estourado o timeout (possível, porém não desejado)
-			if(dt>SEND_TIMEOUT){
-				sendBurst(Arg->port);
-			}else{
-				//caso desejável para a chamada send: quando não há frames destinados a essa porta.
-				double p = 0;
-				
-				//calculando a probabilidade de uso desta porta no próximo intervalo de tempo
-				for (j = 0; j < dataplane.port_count; j++) {
-					if(Arg->ctrl->active[Arg->portNumber]){
-						p+=Arg->ctrl->forwardingMap[j][Arg->portNumber];
-					}
-				}
-				pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
-					p/=Arg->ctrl->totalSum;
-				pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
-				
-				if(p < Arg->port->sendThreshold){
-					sendBurst(Arg->port);
-				}
-			}
-		}
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//sinalizando que o datapath vai voltar à ativa
 			Arg->ctrl->active[Arg->portNumber] = true;
@@ -106,7 +113,7 @@ void* commonDataPath(void* arg){
 				for (i = 0; i < dataplane.port_count; i++) {
 					//a flag é acionada se pelo menos um registro estiver com seu valor igual ao máximo suportado pela
 					//variável
-					if(++Arg->ctrl->forwardingMap[Arg->portNumber][i]==~((unsigned int) 0)){
+					if(++Arg->ctrl->forwardingMap[Arg->portNumber][i]==MAXVAL_FORWARDINGMAP){
 						ovCell=i;
 					}
 				}
@@ -119,7 +126,7 @@ void* commonDataPath(void* arg){
 			}else if((ret!=CONTROLLER)&&(ret!=DROP)){
 				//a flag é acionada se o registro estiver com seu valor igual ao máximo suportado pela
 				//variável
-				if(++Arg->ctrl->forwardingMap[Arg->portNumber][ret]==~((unsigned int) 0)){
+				if(++Arg->ctrl->forwardingMap[Arg->portNumber][ret]==MAXVAL_FORWARDINGMAP){
 					ovCell=ret;
 				}
 			
@@ -144,7 +151,7 @@ void* commonDataPath(void* arg){
 				}
 			
 				//verifica novamente, desta vez em zona crítica
-				if(Arg->ctrl->forwardingMap[Arg->portNumber][ovCell]==~((unsigned int) 0)){
+				if(Arg->ctrl->forwardingMap[Arg->portNumber][ovCell]==MAXVAL_FORWARDINGMAP){
 			
 					//divide todo o mapa por 2 (o que mantém a proporção entre as células
 					for (i = 0; i < dataplane.port_count; i++) {
@@ -167,8 +174,8 @@ void* commonDataPath(void* arg){
 		}
 		//sinalizando que o datapath vai ficar inativo
 		Arg->ctrl->active[Arg->portNumber] = false;
-			
-		sched_yield();
+		//tenta enviar os frames dessa porta em rajada
+		tryToSend(Arg->ctrl, Arg->portNumber);
 	}
 	pthread_exit(NULL);
 }

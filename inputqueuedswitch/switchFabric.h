@@ -18,12 +18,12 @@
 			pthread_mutex_t mutex_total_sum;//proteje a variável abaixo
 			long long int totalSum;//soma total dos valores da estrutura (denominador da razão
 			//de probabilidade
-			bool* active;//vetor de flags sinalizadas pelo próprio caminho de dados indicando que o mesmo
-			//está ativo
+			bool* active;//vetor de flags sinalizadas pelo próprio caminho de dados indicando que a
+			//porta correspondente está ativa
 	}switchCtrlReg;
 
 	switchCtrlReg* createControlRegisters();
-
+	
 	//argumentos necessários para a operação dos caminhos de dados
 	//dedicados a cada porta de entrada
 	typedef struct{
