@@ -44,10 +44,10 @@ struct agent {
     struct agent_options *options;//identificação do dataplane e do controlador
 };
 
-struct agent* agent = NULL;//vetor com todos os agentes (um para cada datapath)
-struct ubpf_vm** vm = NULL;//vetor com todas as máquinas virtuais (uma para cada agente)
+struct agent* agent = NULL;//vetor com todos os agentes (um para cada partição das portas de entrada)
+struct ubpf_vm** vm = NULL;//vetor com todas as máquinas virtuais (uma para cada porta de entrada)
 
-void send_hello(int i)
+void send_hello(int i)//i no caso identifica a partição das portas de entrada
 {
     Header header = HEADER__INIT;
     Hello hello = HELLO__INIT;
@@ -89,7 +89,7 @@ uint64_t ebpf_exec(void* mem, size_t mem_len,int i)
 }
 #endif
 
-int recv_install(void *buffer, Header *header, int i)
+int recv_install(void *buffer, Header *header, int i)//no caso, i deve significar a partição
 {
     InstallRequest *request;
 
@@ -99,6 +99,7 @@ int recv_install(void *buffer, Header *header, int i)
     //
     int err;
     char *errmsg;
+    //repetir isso para cada vm da partição
     err = ubpf_load_elf(vm[i], request->elf.data, request->elf.len, &errmsg);
 
     if (err != 0) {
@@ -108,6 +109,7 @@ int recv_install(void *buffer, Header *header, int i)
 
     // On x86-64 architectures use the JIT compiler, otherwise fallback to the interpreter
     #if __x86_64__
+    	//repetir isso para cada vm da partição
         ubpf_jit_fn ebpfprog = ubpf_compile(vm[i], &errmsg);
     #else
         ubpf_jit_fn ebpfprog = ebpf_exec;
@@ -118,7 +120,7 @@ int recv_install(void *buffer, Header *header, int i)
         free(errmsg);
     }
 
-    *(agent[i].ubpf_fn) = ebpfprog;//como vou passar o agente por aqui??
+    *(agent[i].ubpf_fn) = ebpfprog;
 
     //TODO should send a InstallReply
 
@@ -137,6 +139,8 @@ int recv_tables_list_request(void *buffer, Header *header, int i) {
     TableDefinition **entries;
     entries = malloc(sizeof(TableDefinition *) * TABLE_MAX_ENTRIES); // NOTE: allocate TABLE_MAX_ENTRIES as we don't know the number of entries in the table
 
+    //
+    
     //
     int n_entries = 0;
     char table_name[32] = {0};

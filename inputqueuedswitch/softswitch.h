@@ -76,12 +76,16 @@
 		double sendThreshold;//threshold utilizado para decidir se uma chamada a send() é apropriada
 		//no presente momento
 		double sendThreshold_old;//último valor de sendThreshold
+		//
+		bool free;//sinaliza se um datapath pode alocar esta porta
+		pthread_mutex_t mutex_free_variable;
 	};
 
 	struct dataplane {
 		unsigned long long dpid;//identificador do plano de dados
 		int port_count;//número de portas
 		struct port *ports;//vetor com as portas
+		int* partitions;
 	} dataplane;
 
 	union frame_map {//definição de um frame

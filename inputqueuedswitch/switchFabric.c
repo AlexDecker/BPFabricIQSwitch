@@ -32,6 +32,42 @@ switchCtrlReg* createControlRegisters(){
 	return ctrl;
 }
 
+//ESTA FUNÇÃO AINDA ESTÁ MUITO LENTA!! UNIR COM POLL QUANDO A BUSCA REALIZAR UMA VOLTA COMPLETA
+//OU APENAS ENTRAR AQUI SE UM TIMEOUT FOR ESTOURADO (SEM MENSAGENS NA PORTA ATUAL)
+//reserva uma porta de entrada ao datapath que fizer a chamada
+static inline int allocPort(int partitionId, int currentPort){
+	int firstPort, lastPort, portId;
+	//encontra os limites dessa partição
+	if(partitionId==0){
+		firstPort = 0;
+		lastPort = dataplane.partitions[0];
+	}else{
+		firstPort = dataplane.partitions[partitionId-1]+1;
+		lastPort = dataplane.partitions[partitionId];
+	}
+	//encontra a próxima porta livre dentro da partição
+	struct port* port_base = dataplane.ports;
+	struct port* port;
+	portId = currentPort;
+	bool keepSearching = true;
+	do{
+		portId++;
+		portId = (portId>lastPort)?firstPort:portId;
+		port = port_base + portId;
+		pthread_mutex_lock(&(port->mutex_free_variable));
+			//if the port is availiable and its frames are ready to be processed
+			if((port->free)&&(v2_rx_kernel_ready(
+				port->rx_ring.rd[port->rx_ring.frame_num].iov_base
+				))){
+				port->free=false;//reserve it
+				keepSearching = false;//stop searching
+			}
+		pthread_mutex_unlock(&(port->mutex_free_variable));
+	}while(keepSearching);
+	
+	return portId;
+}
+
 //avalia se é interessante ativar o send burst para determinada porta
 static inline void tryToSend(switchCtrlReg* ctrl, int portNumber){
 	int j;
@@ -73,7 +109,7 @@ static inline void tryToSend(switchCtrlReg* ctrl, int portNumber){
 void* commonDataPath(void* arg){
 	int i,j;
 	commonPathArg* Arg = (commonPathArg*) arg;
-	int portNumber;
+	int portNumber = -1;
 	struct ring *rx_ring;
 	union frame_map ppd;
 	ubpf_jit_fn agent;
@@ -81,7 +117,7 @@ void* commonDataPath(void* arg){
 	uint64_t ret;
 	
 	while (likely(!sigint)) {
-		portNumber = Arg->portNumber;
+		portNumber = allocPort(Arg->partitionId,portNumber);
 		rx_ring = &dataplane.ports[portNumber].rx_ring;
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//sinalizando que o datapath vai voltar à ativa
@@ -178,6 +214,10 @@ void* commonDataPath(void* arg){
 		Arg->ctrl->active[portNumber] = false;
 		//tenta enviar os frames dessa porta em rajada
 		tryToSend(Arg->ctrl, portNumber);
+		//libera a porta
+		pthread_mutex_lock(&(dataplane.ports[portNumber].mutex_free_variable));
+			dataplane.ports[portNumber].free=true;
+		pthread_mutex_unlock(&(dataplane.ports[portNumber].mutex_free_variable));
 	}
 	pthread_exit(NULL);
 }
