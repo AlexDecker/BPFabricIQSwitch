@@ -62,7 +62,6 @@ int setup_socket(struct port *port, char *netdev)
 	port->sendThreshold_old = SEND_THRESHOLD_0;
 	
 	port->free = true;
-	pthread_mutex_init(&(port->mutex_free_variable), NULL);
 
     err = setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v));
     if (err < 0) {
@@ -139,7 +138,6 @@ void teardown_socket(struct port *port){
     free(port->rx_ring.rd);
     
 	pthread_mutex_destroy(&(port->mutex_tx_frame));
-	pthread_mutex_destroy(&(port->mutex_free_variable));
 	
     close(port->fd);
 }

@@ -78,7 +78,6 @@
 		double sendThreshold_old;//último valor de sendThreshold
 		//
 		bool free;//sinaliza se um datapath pode alocar esta porta
-		pthread_mutex_t mutex_free_variable;
 	};
 
 	struct dataplane {

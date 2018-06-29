@@ -20,6 +20,7 @@
 			//de probabilidade)
 			bool* active;//vetor de flags sinalizadas pelo próprio caminho de dados indicando que a
 			//porta correspondente está ativa
+			pthread_mutex_t mutex_alloc_port;//para apenas um alocar por vez
 	}switchCtrlReg;
 
 	switchCtrlReg* createControlRegisters();

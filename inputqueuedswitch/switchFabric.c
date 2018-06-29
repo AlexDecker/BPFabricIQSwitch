@@ -29,13 +29,17 @@ switchCtrlReg* createControlRegisters(){
 	
 	ctrl->totalSum=0;
 	
+	pthread_mutex_init(&(ctrl->mutex_alloc_port), NULL);	
+	
 	return ctrl;
 }
 
 //ESTA FUNÇÃO AINDA ESTÁ MUITO LENTA!! UNIR COM POLL QUANDO A BUSCA REALIZAR UMA VOLTA COMPLETA
 //OU APENAS ENTRAR AQUI SE UM TIMEOUT FOR ESTOURADO (SEM MENSAGENS NA PORTA ATUAL)
 //reserva uma porta de entrada ao datapath que fizer a chamada
-static inline int allocPort(int partitionId, int currentPort){
+static inline int allocPort(int partitionId, int currentPort,
+	switchCtrlReg* ctrl, struct pollfd* localPfd, int* nlocalPfd){
+	
 	int firstPort, lastPort, portId;
 	//encontra os limites dessa partição
 	if(partitionId==0){
@@ -45,25 +49,58 @@ static inline int allocPort(int partitionId, int currentPort){
 		firstPort = dataplane.partitions[partitionId-1]+1;
 		lastPort = dataplane.partitions[partitionId];
 	}
+	
 	//encontra a próxima porta livre dentro da partição
 	struct port* port_base = dataplane.ports;
 	struct port* port;
+	
+	//antecessora da porta a partir da qual a busca se iniciará
+	//(repare que na busca cíclica lastPort é a antecessora de 
+	//firstPort)
+	currentPort = (currentPort!=-1)?currentPort:lastPort;
+	
 	portId = currentPort;
+	
 	bool keepSearching = true;
+	
+	(*nlocalPfd) = 0;
+	
+	//inicia a sessão crítica
+	pthread_mutex_lock(&(ctrl->mutex_alloc_port));
+	
 	do{
 		portId++;
 		portId = (portId>lastPort)?firstPort:portId;
 		port = port_base + portId;
-		pthread_mutex_lock(&(port->mutex_free_variable));
-			//if the port is availiable and its frames are ready to be processed
-			if((port->free)&&(v2_rx_kernel_ready(
-				port->rx_ring.rd[port->rx_ring.frame_num].iov_base
-				))){
-				port->free=false;//reserve it
-				keepSearching = false;//stop searching
+		
+		//Se a porta estiver disponível e os frames estiverem prontos
+		if(v2_rx_kernel_ready(port->rx_ring.rd[port->rx_ring.frame_num].iov_base)){
+			if(port->free){
+				port->free=false;//faça a reserva
+				keepSearching = false;//finalize a busca
+			}else if(portId==currentPort){
+				//a busca deu uma volta completa sem sucesso
+				portId = -1;
+				keepSearching = false;//finalize a busca
 			}
-		pthread_mutex_unlock(&(port->mutex_free_variable));
+		}else{
+			//monte o vetor de pfd para o poll	
+			localPfd[(*nlocalPfd)].fd = dataplane.ports[portId].fd;
+        	localPfd[(*nlocalPfd)].events = POLLIN | POLLERR;
+        	localPfd[(*nlocalPfd)].revents = 0;
+        	(*nlocalPfd)++;
+        	//verifique a condição de parada
+			if(portId==currentPort){
+				//a busca deu uma volta completa sem sucesso
+				portId = -1;
+				keepSearching = false;//finalize a busca
+				//monte o vetor de pfd para o poll
+			}
+		}
 	}while(keepSearching);
+	
+	//finaliza a sessão crítica
+	pthread_mutex_unlock(&(ctrl->mutex_alloc_port));
 	
 	return portId;
 }
@@ -115,9 +152,24 @@ void* commonDataPath(void* arg){
 	ubpf_jit_fn agent;
 	struct metadatahdr* metadatahdr;
 	uint64_t ret;
+	int nLocalPfd;
+	
+	if(Arg->partitionId==0) nLocalPfd = dataplane.partitions[0]+1;
+	else nLocalPfd = dataplane.partitions[Arg->partitionId]
+		-dataplane.partitions[Arg->partitionId-1];
+	
+	struct pollfd* localPfd = (struct pollfd*) malloc(nLocalPfd*sizeof(struct pollfd));
 	
 	while (likely(!sigint)) {
-		portNumber = allocPort(Arg->partitionId,portNumber);
+		/*while(true){
+			portNumber = allocPort(Arg->partitionId,portNumber,Arg->ctrl,localPfd,&nLocalPfd);
+			if(portNumber==-1){//não há portas a serem processadas
+				poll(localPfd, nLocalPfd, -1);//aguarde
+			}else{
+				break;//pare apenas quando tiver uma porta válida para processar
+			}
+		}*/
+		portNumber = Arg->partitionId;
 		rx_ring = &dataplane.ports[portNumber].rx_ring;
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//sinalizando que o datapath vai voltar à ativa
@@ -214,11 +266,12 @@ void* commonDataPath(void* arg){
 		Arg->ctrl->active[portNumber] = false;
 		//tenta enviar os frames dessa porta em rajada
 		tryToSend(Arg->ctrl, portNumber);
-		//libera a porta
-		pthread_mutex_lock(&(dataplane.ports[portNumber].mutex_free_variable));
-			dataplane.ports[portNumber].free=true;
-		pthread_mutex_unlock(&(dataplane.ports[portNumber].mutex_free_variable));
+		//libera a porta (fora de sessão crítica, visto que esta porta ficará naturalmente
+		//indisponível para a alocação após ser desalocado aqui, ou seja, conflitos aqui não
+		//causarão condições de corrida)
+		dataplane.ports[portNumber].free=true;
 	}
+	free(localPfd);
 	pthread_exit(NULL);
 }
 

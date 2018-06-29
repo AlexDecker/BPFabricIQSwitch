@@ -123,8 +123,6 @@ int main(int argc, char **argv){
     //////
 
     /* */
-    struct pollfd* pfds = (struct pollfd*) malloc(
-		sizeof(struct pollfd)*dataplane.port_count);
 
     // signal(SIGINT, sighandler);
     signal(SIGINT, voidhandler);
@@ -135,13 +133,6 @@ int main(int argc, char **argv){
     for (i = 0; i < dataplane.port_count; i++) {
         // Create the socket, allocate the tx and rx rings and create the frame io vectors
         setup_socket(&dataplane.ports[i], arguments.interfaces[i]);
-
-        // Create the array of pollfd for poll()
-        pfds[i].fd = dataplane.ports[i].fd;
-        pfds[i].events = POLLIN | POLLERR;
-        pfds[i].revents = 0;
-
-        //
         printf("Interface %s, index %d, fd %d\n", arguments.interfaces[i], i, dataplane.ports[i].fd);
     }
     printf("\n");
@@ -250,7 +241,6 @@ int main(int argc, char **argv){
 	/* House keeping */
 	
 	free(cArg);
-	free(pfds);
 	free(ubpf_fn);
 	
     agent_stop();
@@ -261,11 +251,14 @@ int main(int argc, char **argv){
     	free(ctrl->forwardingMap[i]);
         teardown_socket(dataplane.ports+i);
     }
+
+	free(dataplane.partitions);
 	
+	pthread_mutex_destroy(&(ctrl->mutex_total_sum));
+	pthread_mutex_destroy(&(ctrl->mutex_alloc_port));
 	free(ctrl->forwardingMap);
 	free(ctrl->active);
-	
-	free(dataplane.partitions);
+	free(ctrl);
 	
     return 0;
 }
