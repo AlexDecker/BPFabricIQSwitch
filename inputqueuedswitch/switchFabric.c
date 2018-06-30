@@ -37,18 +37,10 @@ switchCtrlReg* createControlRegisters(){
 //ESTA FUNÇÃO AINDA ESTÁ MUITO LENTA!! UNIR COM POLL QUANDO A BUSCA REALIZAR UMA VOLTA COMPLETA
 //OU APENAS ENTRAR AQUI SE UM TIMEOUT FOR ESTOURADO (SEM MENSAGENS NA PORTA ATUAL)
 //reserva uma porta de entrada ao datapath que fizer a chamada
-static inline int allocPort(int partitionId, int currentPort,
+static inline int allocPort(int firstPort, int lastPort, int currentPort,
 	switchCtrlReg* ctrl, struct pollfd* localPfd, int* nlocalPfd){
 	
-	int firstPort, lastPort, portId;
-	//encontra os limites dessa partição
-	if(partitionId==0){
-		firstPort = 0;
-		lastPort = dataplane.partitions[0];
-	}else{
-		firstPort = dataplane.partitions[partitionId-1]+1;
-		lastPort = dataplane.partitions[partitionId];
-	}
+	int portId;
 	
 	//encontra a próxima porta livre dentro da partição
 	struct port* port_base = dataplane.ports;
@@ -85,8 +77,8 @@ static inline int allocPort(int partitionId, int currentPort,
 			}
 		}else{
 			//monte o vetor de pfd para o poll	
-			localPfd[(*nlocalPfd)].fd = dataplane.ports[portId].fd;
-        	localPfd[(*nlocalPfd)].events = POLLIN | POLLERR;
+			localPfd[(*nlocalPfd)].fd = port->fd;
+        	localPfd[(*nlocalPfd)].events = POLLIN;
         	localPfd[(*nlocalPfd)].revents = 0;
         	(*nlocalPfd)++;
         	//verifique a condição de parada
@@ -145,31 +137,44 @@ static inline void tryToSend(switchCtrlReg* ctrl, int portNumber){
 
 void* commonDataPath(void* arg){
 	int i,j;
-	commonPathArg* Arg = (commonPathArg*) arg;
+	int firstPort, lastPort;
 	int portNumber = -1;
+	int nLocalPfd;
+	uint64_t ret;
+	
+	commonPathArg* Arg = (commonPathArg*) arg;
+	
 	struct ring *rx_ring;
 	union frame_map ppd;
 	ubpf_jit_fn agent;
 	struct metadatahdr* metadatahdr;
-	uint64_t ret;
-	int nLocalPfd;
 	
-	if(Arg->partitionId==0) nLocalPfd = dataplane.partitions[0]+1;
-	else nLocalPfd = dataplane.partitions[Arg->partitionId]
+	if(Arg->partitionId==0){
+		nLocalPfd = dataplane.partitions[0]+1;
+		firstPort = 0;
+		lastPort = dataplane.partitions[0];
+	}else{
+		firstPort = dataplane.partitions[Arg->partitionId-1]+1;
+		lastPort = dataplane.partitions[Arg->partitionId];
+		nLocalPfd = dataplane.partitions[Arg->partitionId]
 		-dataplane.partitions[Arg->partitionId-1];
+	}
+	
+	printf("Starting datapath to process from %d to %d\n",firstPort,lastPort);
 	
 	struct pollfd* localPfd = (struct pollfd*) malloc(nLocalPfd*sizeof(struct pollfd));
 	
 	while (likely(!sigint)) {
-		/*while(true){
-			portNumber = allocPort(Arg->partitionId,portNumber,Arg->ctrl,localPfd,&nLocalPfd);
+		while(true){
+			portNumber = allocPort(firstPort,lastPort,portNumber,Arg->ctrl,localPfd,&nLocalPfd);
 			if(portNumber==-1){//não há portas a serem processadas
+				portNumber = firstPort;
+				break;
 				poll(localPfd, nLocalPfd, -1);//aguarde
 			}else{
 				break;//pare apenas quando tiver uma porta válida para processar
 			}
-		}*/
-		portNumber = Arg->partitionId;
+		}
 		rx_ring = &dataplane.ports[portNumber].rx_ring;
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//sinalizando que o datapath vai voltar à ativa
