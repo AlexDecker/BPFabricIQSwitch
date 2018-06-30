@@ -116,10 +116,9 @@ int main(int argc, char **argv){
     dataplane.port_count = arguments.interface_count;
     dataplane.ports = calloc(dataplane.port_count, sizeof(struct port));
     //ISSO AQUI É PROVISÓRIO!!!!!!
-    int nPartitions = 2;
+    int nPartitions = 1;
     dataplane.partitions = (int*)malloc(sizeof(int)*nPartitions);
-    dataplane.partitions[0] = 0;
-    dataplane.partitions[1] = 1;
+    dataplane.partitions[0] = 2;
     //////
 
     /* */
