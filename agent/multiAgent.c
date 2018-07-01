@@ -529,8 +529,8 @@ uint64_t bpf_delete(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4, uint64_t
     return bpf_delete_elem(r1, r2);
 }
 
-void *agent_task(void* portNum){
-	int i = *((int*) portNum);
+void *agent_task(void* partNum){
+	int i = *((int*) partNum);
     //
     uint8_t buf[8192]; // TODO should have a proper buffer that wraps around and expand if the message is bigger than this
     struct sockaddr_in saddr;
@@ -613,33 +613,33 @@ void *agent_task(void* portNum){
         perror("unable to connect to the controller");
         sleep(5);
     }
-	free(portNum);
+	free(partNum);
     pthread_exit(NULL);
 }
 
-int agent_start(ubpf_jit_fn *ubpf_fn, tx_packet_fn tx_fn, struct agent_options *opts, int portNum, int portQtd)
+int agent_start(ubpf_jit_fn *ubpf_fn, tx_packet_fn tx_fn, struct agent_options *opts, int partNum, int partQtd)
 {
     int err;int* i;
     pthread_t agent_thread;
     
     if(agent == NULL){
-    	agent = (struct agent*) malloc(sizeof(struct agent)*portQtd);
+    	agent = (struct agent*) malloc(sizeof(struct agent)*partQtd);
     	if(agent == NULL){
     		printf("Error while allocating eBPF agent.\n");
     	}
     }
     if(vm == NULL){
-		vm = (struct ubpf_vm**) malloc(sizeof(struct ubpf_vm*)*portQtd);
+		vm = (struct ubpf_vm**) malloc(sizeof(struct ubpf_vm*)*partQtd);
 		if(vm == NULL){
     		printf("Error while allocating virtual machine.\n");
     	}
 	}
 
-    agent[portNum].ubpf_fn = ubpf_fn;
-    agent[portNum].transmit = tx_fn;
-    agent[portNum].options = opts;
+    agent[partNum].ubpf_fn = ubpf_fn;
+    agent[partNum].transmit = tx_fn;
+    agent[partNum].options = opts;
     
-    i = (int*) malloc(sizeof(int));*i = portNum;
+    i = (int*) malloc(sizeof(int));*i = partNum;
     err = pthread_create(&agent_thread, NULL, agent_task, i);
     return err;
 }

@@ -21,15 +21,17 @@
 			bool* active;//vetor de flags sinalizadas pelo próprio caminho de dados indicando que a
 			//porta correspondente está ativa
 			pthread_mutex_t mutex_alloc_port;//para apenas um alocar por vez
+			
+			int* suggestedPort;//indica qual deve ser a próxima porta para cada caminho de dados
 	}switchCtrlReg;
 
-	switchCtrlReg* createControlRegisters();
+	switchCtrlReg* createControlRegisters(int nDatapaths);
 	
 	//argumentos necessários para a operação dos caminhos de dados
 	//dedicados a cada porta de entrada
 	typedef struct{
         	switchCtrlReg* ctrl;//dá acesso ao registro de controle
-	        int partitionId;//identificador da partição
+	        int datapathId;//identificador do caminho de dados
 			ubpf_jit_fn* ubpf_fn;//ponteiro do ponteiro da função do agente eBPF
 	}commonPathArg;
 

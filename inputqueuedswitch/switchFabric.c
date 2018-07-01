@@ -8,7 +8,7 @@ static inline void v2_rx_user_ready(struct tpacket2_hdr *hdr){
 static inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
     return ((hdr->tp_status & TP_STATUS_USER) == TP_STATUS_USER);}
 
-switchCtrlReg* createControlRegisters(){
+switchCtrlReg* createControlRegisters(int nDatapaths){
 	int i;
 	
 	switchCtrlReg* ctrl = (switchCtrlReg*) malloc(sizeof(switchCtrlReg));
@@ -29,7 +29,12 @@ switchCtrlReg* createControlRegisters(){
 	
 	ctrl->totalSum=0;
 	
-	pthread_mutex_init(&(ctrl->mutex_alloc_port), NULL);	
+	pthread_mutex_init(&(ctrl->mutex_alloc_port), NULL);
+	
+	ctrl->suggestedPort = (int*) malloc(sizeof(int)*nDatapaths);
+	for(i=0; i<nDatapaths; i++){
+		ctrl->suggestedPort[i] = -1;
+	}
 	
 	return ctrl;
 }
@@ -132,30 +137,28 @@ static inline void tryToSend(switchCtrlReg* ctrl, int portNumber){
 
 void* commonDataPath(void* arg){
 	int i,j;
-	int firstPort, lastPort;
 	int portNumber = -1;
+	int count = 0;
+	int ovCell;
 	uint64_t ret;
 	
 	commonPathArg* Arg = (commonPathArg*) arg;
 	
+	struct port* port;
 	struct ring *rx_ring;
 	union frame_map ppd;
-	ubpf_jit_fn agent;
+	ubpf_jit_fn eBPFEngine;
 	struct metadatahdr* metadatahdr;
 	
-	if(Arg->partitionId==0){
-		firstPort = 0;
-		lastPort = dataplane.partitions[0];
-	}else{
-		firstPort = dataplane.partitions[Arg->partitionId-1]+1;
-		lastPort = dataplane.partitions[Arg->partitionId];
-	}
-	
-	printf("Starting datapath to process from %d to %d\n",firstPort,lastPort);
+	printf("Starting datapath %d\n",Arg->datapathId);
 	
 	while (likely(!sigint)) {
-		portNumber = allocPort(firstPort,lastPort,portNumber,Arg->ctrl);
-		rx_ring = &dataplane.ports[portNumber].rx_ring;
+		do{
+			portNumber = Arg->ctrl->suggestedPort[Arg->datapathId];
+		}while(portNumber==-1);
+		
+		port = dataplane.ports+portNumber;
+		rx_ring = &(port->rx_ring);
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//sinalizando que o datapath vai voltar à ativa
 			Arg->ctrl->active[portNumber] = true;
@@ -168,9 +171,9 @@ void* commonDataPath(void* arg){
 			metadatahdr->nsec = ppd.v2->tp_h.tp_nsec;
 			metadatahdr->length = (uint16_t)ppd.v2->tp_h.tp_len;
 
-			if (*(Arg->ubpf_fn) != NULL) {
-				agent = *(Arg->ubpf_fn);
-				ret = agent(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
+			if (*(Arg->ubpf_fn[port->partitionId]) != NULL) {
+				eBPFEngine = *(Arg->ubpf_fn[port->partitionId]);
+				ret = eBPFEngine(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
 				transmit(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr), (uint32_t)ret, 0);
 			}
 
@@ -178,73 +181,78 @@ void* commonDataPath(void* arg){
 			
 			//move o ponteiro rx para o próximo slot
 			rx_ring->frame_num = (rx_ring->frame_num + 1) % rx_ring->req.tp_frame_nr;
-		
-			int ovCell = -1;//se não for -1, consiste na coluna que está prestes a sofrer overflow
-		
-			//cria uma zona crítica associada aos valores que possivelmente serão modificados
-			pthread_mutex_lock((Arg->ctrl->mutex_forward_map)+portNumber);
-		
-			if(ret==FLOOD){
-				for (i = 0; i < dataplane.port_count; i++) {
-					//a flag é acionada se pelo menos um registro estiver com seu valor igual ao máximo suportado pela
-					//variável
-					if(++Arg->ctrl->forwardingMap[portNumber][i]==MAXVAL_FORWARDINGMAP){
-						ovCell=i;
-					}
-				}
 			
-				//atualizando o denominador da razão de probabilidade
-				pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
-					Arg->ctrl->totalSum+=dataplane.port_count;
-				pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
-			
-			}else if((ret!=CONTROLLER)&&(ret!=DROP)){
-				//a flag é acionada se o registro estiver com seu valor igual ao máximo suportado pela
-				//variável
-				if(++Arg->ctrl->forwardingMap[portNumber][ret]==MAXVAL_FORWARDINGMAP){
-					ovCell=ret;
-				}
-			
-				//atualizando o denominador da razão de probabilidade
-				pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
-					Arg->ctrl->totalSum++;
-				pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
-			}else{
-				//atualizando o denominador da razão de probabilidade
-				pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
-					Arg->ctrl->totalSum++;
-				pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
-			}
+			if(count==UPDATE_STATS){
+				count = 0;
+				ovCell = -1;//se não for -1, consiste na coluna que está prestes a sofrer overflow
 		
-			pthread_mutex_unlock((Arg->ctrl->mutex_forward_map)+portNumber);
-		
-			if(ovCell>0){//se alguma posição está prestes a sofrer overflow
-		
-				//evita que qualquer outra thread acesse o mapa
-				for(i=0;i<dataplane.port_count;i++){
-					pthread_mutex_lock((Arg->ctrl->mutex_forward_map)+i);
-				}
+				//cria uma zona crítica associada aos valores que possivelmente serão modificados
+				pthread_mutex_lock((Arg->ctrl->mutex_forward_map)+portNumber);
 			
-				//verifica novamente, desta vez em zona crítica
-				if(Arg->ctrl->forwardingMap[portNumber][ovCell]==MAXVAL_FORWARDINGMAP){
-			
-					//divide todo o mapa por 2 (o que mantém a proporção entre as células
+				if(ret==FLOOD){
 					for (i = 0; i < dataplane.port_count; i++) {
-						for (j = 0; j < dataplane.port_count; j++) {
-							Arg->ctrl->forwardingMap[i][j]=Arg->ctrl->forwardingMap[i][j]>>2;
+						//a flag é acionada se pelo menos um registro estiver com seu valor igual ao máximo suportado pela
+						//variável
+						if(++Arg->ctrl->forwardingMap[portNumber][i]==MAXVAL_FORWARDINGMAP){
+							ovCell=i;
 						}
 					}
 			
 					//atualizando o denominador da razão de probabilidade
 					pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
-						Arg->ctrl->totalSum/=2;
+						Arg->ctrl->totalSum+=dataplane.port_count;
 					pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
 			
-				}
+				}else if((ret!=CONTROLLER)&&(ret!=DROP)){
+					//a flag é acionada se o registro estiver com seu valor igual ao máximo suportado pela
+					//variável
+					if(++Arg->ctrl->forwardingMap[portNumber][ret]==MAXVAL_FORWARDINGMAP){
+						ovCell=ret;
+					}
 			
-				for(i=0;i<dataplane.port_count;i++){
-					pthread_mutex_unlock((Arg->ctrl->mutex_forward_map)+i);
+					//atualizando o denominador da razão de probabilidade
+					pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
+						Arg->ctrl->totalSum++;
+					pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
+				}else{
+					//atualizando o denominador da razão de probabilidade
+					pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
+						Arg->ctrl->totalSum++;
+					pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
 				}
+		
+				pthread_mutex_unlock((Arg->ctrl->mutex_forward_map)+portNumber);
+		
+				if(ovCell>0){//se alguma posição está prestes a sofrer overflow
+		
+					//evita que qualquer outra thread acesse o mapa
+					for(i=0;i<dataplane.port_count;i++){
+						pthread_mutex_lock((Arg->ctrl->mutex_forward_map)+i);
+					}
+			
+					//verifica novamente, desta vez em zona crítica
+					if(Arg->ctrl->forwardingMap[portNumber][ovCell]==MAXVAL_FORWARDINGMAP){
+			
+						//divide todo o mapa por 2 (o que mantém a proporção entre as células
+						for (i = 0; i < dataplane.port_count; i++) {
+							for (j = 0; j < dataplane.port_count; j++) {
+								Arg->ctrl->forwardingMap[i][j]=Arg->ctrl->forwardingMap[i][j]>>2;
+							}
+						}
+			
+						//atualizando o denominador da razão de probabilidade
+						pthread_mutex_lock(&(Arg->ctrl->mutex_total_sum));
+							Arg->ctrl->totalSum/=2;
+						pthread_mutex_unlock(&(Arg->ctrl->mutex_total_sum));
+			
+					}
+			
+					for(i=0;i<dataplane.port_count;i++){
+						pthread_mutex_unlock((Arg->ctrl->mutex_forward_map)+i);
+					}
+				}
+			}else{
+				count++;
 			}
 		}
 		//sinalizando que o datapath vai ficar inativo

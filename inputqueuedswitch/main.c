@@ -117,8 +117,9 @@ int main(int argc, char **argv){
     dataplane.ports = calloc(dataplane.port_count, sizeof(struct port));
     //ISSO AQUI É PROVISÓRIO!!!!!!
     int nPartitions = 1;
-    dataplane.partitions = (int*)malloc(sizeof(int)*nPartitions);
-    dataplane.partitions[0] = 2;
+    int totalNDataPath = 2;
+    dataplane.ports[0].partitionId = 0;
+    dataplane.ports[1].partitionId = 0;
     //////
 
     /* */
@@ -135,35 +136,18 @@ int main(int argc, char **argv){
         printf("Interface %s, index %d, fd %d\n", arguments.interfaces[i], i, dataplane.ports[i].fd);
     }
     printf("\n");
-
-    //Calcula o número de caminhos de dados a serem criados
-    int totalNDataPath;
-    if(dataplane.partitions[0]==0){
-    	totalNDataPath = 1;
-    }else{
-    	totalNDataPath = dataplane.partitions[0];
-    }
-    for(i = 1; i < nPartitions; i++){
-    	if(dataplane.partitions[i]-dataplane.partitions[i-1]==1){
-			totalNDataPath += 1;
-		}else{
-			totalNDataPath += dataplane.partitions[i]-dataplane.partitions[i-1]-1;
-		}	
-    }
     
     printf("Creating %d datapaths.\n",totalNDataPath);
     
-    //ALTERAR PARA UM POR PARTIÇÃO
-    ubpf_jit_fn* ubpf_fn = (ubpf_jit_fn*)malloc(totalNDataPath*sizeof(ubpf_jit_fn));
+    ubpf_jit_fn* ubpf_fn = (ubpf_jit_fn*)malloc(nPartitions*sizeof(ubpf_jit_fn));
     struct agent_options* options = (struct agent_options*)malloc(
-    	totalNDataPath*sizeof(struct agent_options));
+    	nPartitions*sizeof(struct agent_options));
 	
-	//ALTERAR PARA UM POR PARTIÇÃO
-	for (i = 0; i < totalNDataPath; i++) {
-		options[i].dpid = dataplane.dpid + i<<32;//dataplane virtual com uma porta, para
+	for (i = 0; i < nPartitions; i++) {
+		options[i].dpid = dataplane.dpid + i<<32;//dataplane virtual para cada partição, para
 		//facilitar a identificação do agente eBPF
 		options[i].controller = arguments.controller;
-	    agent_start(ubpf_fn+i, (tx_packet_fn)transmit, options+i, i, dataplane.port_count);//ALTERAR ESSA FUNÇÃO TB
+	    agent_start(ubpf_fn+i, (tx_packet_fn)transmit, options+i, i, nPartitions);//ALTERAR ESSA FUNÇÃO TB
 	}
 	
 	commonPathArg* cArg = (commonPathArg*) malloc(
@@ -175,65 +159,30 @@ int main(int argc, char **argv){
 	
 	pthread_t tid[totalNDataPath];
 	
-    switchCtrlReg* ctrl = createControlRegisters();
+    switchCtrlReg* ctrl = createControlRegisters(totalNDataPath);
 	
-	int nDataPath;
-	int dataPathIndex = 0;
-	//criação dos caminhos de dados da primeira partição
-	if(dataplane.partitions[0]==0)
-		//se houver apenas uma porta na partição, crie um caminho de dados
-		nDataPath = 1;
-	else
-		//se tiver mais, crie o número de portas - 1 caminhos de dados
-		nDataPath = dataplane.partitions[0];
-	
-	for (i = 0; i < nDataPath; i++) {
+	for (i = 0; i < totalNDataPath; i++) {
 		//preenchendo os campos da estrutura commonPathArg correspondente
 		//a essa thread
-        cArg[dataPathIndex].ctrl = ctrl;
-		cArg[dataPathIndex].partitionId = 0;
-		cArg[dataPathIndex].ubpf_fn = ubpf_fn+dataPathIndex;//ponteiro da função do agente eBPF
-		//criando a thread responsável por esta porta de entrada
-		if(pthread_create(&(tid[dataPathIndex]), NULL, commonDataPath,&cArg[dataPathIndex])){
+        cArg[i].ctrl = ctrl;
+        cArg[i].datapathId = i;
+		cArg[i].ubpf_fn = ubpf_fn;//ponteiro das funções do agente eBPF (de cada agente)
+		if(pthread_create(&(tid[i]), NULL, commonDataPath,&cArg[i])){
 			printf("Error while creating a datapath.\n");
 		}else{
-			printf("Datapath created for partition 0.\n");
+			printf("Datapath created successfully.\n");
 		}
 		/*else if(!pthread_setschedprio(tid,99)){
 			printf("Cannot set thread priority\n");
 		}*/
-		dataPathIndex++;
 	}
 	
-	//criação dos caminhos de dados das demais partições
-	for(int j = 1; j < nPartitions; j++){
-		if(dataplane.partitions[j]-dataplane.partitions[j-1]==1)
-			//se houver apenas uma porta na partição, crie um caminho de dados
-			nDataPath = 1;
-		else
-			//se tiver mais, crie o número de portas - 1 caminhos de dados
-			nDataPath = dataplane.partitions[j]-dataplane.partitions[j-1]-1;
-	
-		for (i = 0; i < nDataPath; i++) {
-			//preenchendo os campos da estrutura commonPathArg correspondente
-			//a essa thread
-		    cArg[dataPathIndex].ctrl = ctrl;
-			cArg[dataPathIndex].partitionId = j;
-			cArg[dataPathIndex].ubpf_fn = ubpf_fn + dataPathIndex;//ponteiro da função do agente eBPF
-			//criando a thread responsável por esta porta de entrada
-			if(pthread_create(&(tid[dataPathIndex]), NULL, commonDataPath,&cArg[dataPathIndex])){
-				printf("Error while creating a common datapath.\n");
-			}else{
-				printf("Datapath created for partition %d.\n",j);
-			}
-			/*else if(!pthread_setschedprio(tid,99)){
-				printf("Cannot set thread priority\n");
-			}*/
-			dataPathIndex++;
-		}
+	while (likely(!sigint)) {
+		ctrl->suggestedPort[0] = 0;
+		ctrl->suggestedPort[1] = 1;
 	}
 	
-	for (i = 0; i < dataPathIndex; i++) {
+	for (i = 0; i < totalNDataPath; i++) {
 		pthread_join(tid[i],NULL);
 	}
 	
@@ -250,13 +199,12 @@ int main(int argc, char **argv){
     	free(ctrl->forwardingMap[i]);
         teardown_socket(dataplane.ports+i);
     }
-
-	free(dataplane.partitions);
 	
 	pthread_mutex_destroy(&(ctrl->mutex_total_sum));
 	pthread_mutex_destroy(&(ctrl->mutex_alloc_port));
 	free(ctrl->forwardingMap);
 	free(ctrl->active);
+	free(ctrl->suggestedPort);
 	free(ctrl);
 	
     return 0;

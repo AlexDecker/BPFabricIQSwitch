@@ -77,6 +77,8 @@
 		//no presente momento
 		double sendThreshold_old;//último valor de sendThreshold
 		//
+		int partitionId;
+		//
 		bool free;//sinaliza se um datapath pode alocar esta porta
 	};
 
@@ -84,7 +86,6 @@
 		unsigned long long dpid;//identificador do plano de dados
 		int port_count;//número de portas
 		struct port *ports;//vetor com as portas
-		int* partitions;
 	} dataplane;
 
 	union frame_map {//definição de um frame

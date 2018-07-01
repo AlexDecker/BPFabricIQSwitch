@@ -8,7 +8,7 @@ struct agent_options {
     char* controller;
 };
 
-int agent_start(ubpf_jit_fn *ubpf_fn, tx_packet_fn tx_fn, struct agent_options *opts, int portNum, int portQtd);
+int agent_start(ubpf_jit_fn *ubpf_fn, tx_packet_fn tx_fn, struct agent_options *opts, int partNum, int partQtd);
 int agent_packetin(void *pkt, int len, int i);//o i é a porta de entrada (o index do agente)
 int agent_stop(void);
 
