@@ -36,5 +36,7 @@
 	}commonPathArg;
 
 	void* commonDataPath(void* arg);
+	
+	void crossbarAnycast(switchCtrlReg* ctrl);
 
 #endif

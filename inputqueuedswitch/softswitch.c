@@ -61,7 +61,7 @@ int setup_socket(struct port *port, char *netdev)
 	port->sendThreshold = SEND_THRESHOLD_0;
 	port->sendThreshold_old = SEND_THRESHOLD_0;
 	
-	port->free = true;
+	port->datapathId = -1;
 
     err = setsockopt(fd, SOL_PACKET, PACKET_VERSION, &v, sizeof(v));
     if (err < 0) {

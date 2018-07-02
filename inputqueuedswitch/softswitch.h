@@ -79,7 +79,7 @@
 		//
 		int partitionId;
 		//
-		bool free;//sinaliza se um datapath pode alocar esta porta
+		int datapathId;//datapath que alocou essa porta
 	};
 
 	struct dataplane {

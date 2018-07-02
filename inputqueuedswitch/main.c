@@ -117,9 +117,11 @@ int main(int argc, char **argv){
     dataplane.ports = calloc(dataplane.port_count, sizeof(struct port));
     //ISSO AQUI É PROVISÓRIO!!!!!!
     int nPartitions = 1;
-    int totalNDataPath = 2;
+    int totalNDataPath = 3;
     dataplane.ports[0].partitionId = 0;
     dataplane.ports[1].partitionId = 0;
+    dataplane.ports[2].partitionId = 0;
+    dataplane.ports[3].partitionId = 0;
     //////
 
     /* */
@@ -177,9 +179,13 @@ int main(int argc, char **argv){
 		}*/
 	}
 	
+	//faz uma alocação inicial qualquer dos caminhos de dados
+	for(i = 0; i < totalNDataPath; i++){
+		ctrl->suggestedPort[i] = i;
+	}
+	
 	while (likely(!sigint)) {
-		ctrl->suggestedPort[0] = 0;
-		ctrl->suggestedPort[1] = 1;
+		crossbarAnycast(ctrl);//determina quais portas serão processadas por quais caminhos de dados
 	}
 	
 	for (i = 0; i < totalNDataPath; i++) {
@@ -201,7 +207,6 @@ int main(int argc, char **argv){
     }
 	
 	pthread_mutex_destroy(&(ctrl->mutex_total_sum));
-	pthread_mutex_destroy(&(ctrl->mutex_alloc_port));
 	free(ctrl->forwardingMap);
 	free(ctrl->active);
 	free(ctrl->suggestedPort);

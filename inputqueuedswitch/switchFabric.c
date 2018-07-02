@@ -29,72 +29,12 @@ switchCtrlReg* createControlRegisters(int nDatapaths){
 	
 	ctrl->totalSum=0;
 	
-	pthread_mutex_init(&(ctrl->mutex_alloc_port), NULL);
-	
 	ctrl->suggestedPort = (int*) malloc(sizeof(int)*nDatapaths);
 	for(i=0; i<nDatapaths; i++){
 		ctrl->suggestedPort[i] = -1;
 	}
 	
 	return ctrl;
-}
-
-//reserva uma porta de entrada ao datapath que fizer a chamada
-static inline int allocPort(int firstPort, int lastPort, int currentPort, switchCtrlReg* ctrl){
-	
-	int portId;
-	
-	//encontra a próxima porta livre dentro da partição
-	struct port* port_base = dataplane.ports;
-	struct port* port;
-	
-	//antecessora da porta a partir da qual a busca se iniciará
-	//(repare que na busca cíclica lastPort é a antecessora de 
-	//firstPort)
-	currentPort = (currentPort!=-1)?currentPort:lastPort;
-	
-	portId = currentPort;
-	
-	bool keepSearching = true;
-	int secondOption = -1;
-	
-	//inicia a sessão crítica
-	pthread_mutex_lock(&(ctrl->mutex_alloc_port));
-	
-	do{
-		portId++;
-		portId = (portId>lastPort)?firstPort:portId;
-		port = port_base + portId;
-		
-		//Se a porta estiver disponível e os frames estiverem prontos
-		if(v2_rx_kernel_ready(port->rx_ring.rd[port->rx_ring.frame_num].iov_base)){
-			if(port->free){
-				port->free=false;//faça a reserva
-				keepSearching = false;//finalize a busca
-			}else if(portId==currentPort){
-				//a busca deu uma volta completa sem sucesso
-				portId = secondOption;
-				port_base[portId].free = false;
-				keepSearching = false;//finalize a busca
-			}
-		}else{
-			if(port->free){
-				secondOption = portId;
-			}
-        	//verifique a condição de parada
-			if(portId==currentPort){
-				//a busca deu uma volta completa sem sucesso
-				portId = secondOption;
-				port_base[portId].free = false;
-				keepSearching = false;//finalize a busca
-			}
-		}
-	}while(keepSearching);
-	
-	//finaliza a sessão crítica
-	pthread_mutex_unlock(&(ctrl->mutex_alloc_port));
-	
-	return portId;
 }
 
 //avalia se é interessante ativar o send burst para determinada porta
@@ -259,11 +199,69 @@ void* commonDataPath(void* arg){
 		Arg->ctrl->active[portNumber] = false;
 		//tenta enviar os frames dessa porta em rajada
 		tryToSend(Arg->ctrl, portNumber);
-		//libera a porta (fora de sessão crítica, visto que esta porta ficará naturalmente
-		//indisponível para a alocação após ser desalocado aqui, ou seja, conflitos aqui não
-		//causarão condições de corrida)
-		dataplane.ports[portNumber].free=true;
 	}
 	pthread_exit(NULL);
 }
 
+//aloca dinamicamente caminhos de dados para processar as portas de entrada
+//considera que todos os caminhos de dados começam alocados
+void crossbarAnycast(switchCtrlReg* ctrl){
+	int i;
+	int nPorts = dataplane.port_count;
+	
+	//ring buffer para armazenar portas eventualmente sem atividade
+	int idlePorts[nPorts];
+	for(i=0;i<nPorts;i++)idlePorts[i]=-1;//trocar por memset
+	int removeIndex = 0;
+	int insertIndex = 0;
+	
+	struct port* ports = dataplane.ports;
+	struct port* port;
+	struct ring* rx_ring;
+	
+	int i_aux;
+	struct port* port_aux;
+	struct ring* rx_ring_aux;
+	
+	for(i=0;i<nPorts;i++){
+		port = ports+i;
+		rx_ring = &(port->rx_ring);
+		if(port->datapathId==-1){
+			if(!ctrl->active[i]){//se de fato ninguém está trabalhando nela
+				if(v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
+					//se a porta tiver atividade, mas não estiver alocada
+					//busque portas alocadas mas sem atividade
+					while(true){
+						if(insertIndex==removeIndex){//idlePorts está vazio
+							//Decida se vai desalocar uma porta com atividade
+							//ou manterá como está
+							//TODO
+							break;
+						}
+						//remova o próximo item da lista
+						i_aux = idlePorts[removeIndex];
+						idlePorts[removeIndex] = -1;
+						removeIndex = (removeIndex+1)%nPorts;
+					
+						//verifique se ainda está sem atividade
+						port_aux = ports + i_aux;
+						rx_ring_aux = &(port_aux->rx_ring);
+						if(!v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
+							//se estiver, passe o caminho de dados dessa para a que está sem
+							port->datapathId = port_aux->datapathId;
+							port_aux->datapathId = -1;
+							ctrl->suggestedPort[port->datapathId] = i;
+						}
+					}
+				}
+			}
+		}else if(!v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
+			//se a porta estiver alocada, porém sem atividade
+			if(idlePorts[insertIndex]==-1){//se estiver vazio
+				idlePorts[insertIndex] = i;
+				insertIndex = (insertIndex+1)%nPorts;
+			}
+		}
+			
+	}
+}
