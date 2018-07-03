@@ -118,12 +118,12 @@ int main(int argc, char **argv){
     dataplane.port_count = arguments.interface_count;
     dataplane.ports = calloc(dataplane.port_count, sizeof(struct port));
     //ISSO AQUI É PROVISÓRIO!!!!!!
-    int nPartitions = 1;
+    int nPartitions = 4;
     int totalNDataPath = 3;
     dataplane.ports[0].partitionId = 0;
-    dataplane.ports[1].partitionId = 0;
-    dataplane.ports[2].partitionId = 0;
-    dataplane.ports[3].partitionId = 0;
+    dataplane.ports[1].partitionId = 1;
+    dataplane.ports[2].partitionId = 2;
+    dataplane.ports[3].partitionId = 3;
     //////
 
     /* */
@@ -164,13 +164,14 @@ int main(int argc, char **argv){
 	pthread_t tid[totalNDataPath];
 	
     switchCtrlReg* ctrl = createControlRegisters(totalNDataPath);
-	
+
 	for (i = 0; i < totalNDataPath; i++) {
 		//preenchendo os campos da estrutura commonPathArg correspondente
 		//a essa thread
         cArg[i].ctrl = ctrl;
         cArg[i].datapathId = i;
 		cArg[i].ubpf_fn = ubpf_fn;//ponteiro das funções do agente eBPF (de cada agente)
+		
 		if(pthread_create(&(tid[i]), NULL, commonDataPath,&cArg[i])){
 			printf("Error while creating a datapath.\n");
 		}else{

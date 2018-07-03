@@ -94,13 +94,20 @@ void* commonDataPath(void* arg){
 	printf("Starting datapath %d\n",Arg->datapathId);
 	
 	while (likely(!sigint)) {
+		//tente ler enquanto o número não for válido
 		do{
 			portNumber = Arg->ctrl->suggestedPort[Arg->datapathId];
-		}while(portNumber==-1);
+		}while((portNumber<0)||(portNumber>dataplane.port_count));
 		
 		port = dataplane.ports+portNumber;
+		pthread_mutex_lock(&(port->mutex_allocate));
 		rx_ring = &(port->rx_ring);
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
+			//verificando se a porta não foi realocada para alguém
+			if((port->datapathId!=-1)&&(port->datapathId!=Arg->datapathId)){
+				printf("Saiu\n");
+				break;
+			}
 			//sinalizando que o datapath vai voltar à ativa
 			Arg->ctrl->active[portNumber] = true;
 			
@@ -117,7 +124,7 @@ void* commonDataPath(void* arg){
 				ret = eBPFEngine(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
 				transmit(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr), (uint32_t)ret, 0);
 			}
-
+			
 			v2_rx_user_ready(ppd.raw);//esse slot já pode ser preenchido com um novo quadro
 			
 			//move o ponteiro rx para o próximo slot
@@ -200,6 +207,7 @@ void* commonDataPath(void* arg){
 		Arg->ctrl->active[portNumber] = false;
 		//tenta enviar os frames dessa porta em rajada
 		tryToSend(Arg->ctrl, portNumber);
+		pthread_mutex_unlock(&(port->mutex_allocate));
 	}
 	pthread_exit(NULL);
 }

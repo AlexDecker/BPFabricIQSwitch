@@ -80,6 +80,8 @@
 		int partitionId;
 		//
 		int datapathId;//datapath que alocou essa porta
+		pthread_mutex_t mutex_allocate;//evita que dois caminhos de dados processem a mesma porta
+		//ao mesmo tempo
 	};
 
 	struct dataplane {
