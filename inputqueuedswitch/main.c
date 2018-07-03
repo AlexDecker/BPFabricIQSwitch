@@ -96,6 +96,8 @@ sig_atomic_t sigint;//definição
 void sighandler(int num){sigint = 1;}
 
 int main(int argc, char **argv){
+	
+	srand(time(NULL));
 
 	sigint = 0;//agora é extern, então a definição no ato de declaração causa conflitos.
 		
@@ -182,6 +184,7 @@ int main(int argc, char **argv){
 	//faz uma alocação inicial qualquer dos caminhos de dados
 	for(i = 0; i < totalNDataPath; i++){
 		ctrl->suggestedPort[i] = i;
+		dataplane.ports[i].datapathId = i;
 	}
 	
 	while (likely(!sigint)) {

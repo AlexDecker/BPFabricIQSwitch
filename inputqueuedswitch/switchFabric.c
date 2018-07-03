@@ -33,6 +33,7 @@ switchCtrlReg* createControlRegisters(int nDatapaths){
 	for(i=0; i<nDatapaths; i++){
 		ctrl->suggestedPort[i] = -1;
 	}
+	ctrl->nDatapaths = nDatapaths;
 	
 	return ctrl;
 }
@@ -206,7 +207,8 @@ void* commonDataPath(void* arg){
 //aloca dinamicamente caminhos de dados para processar as portas de entrada
 //considera que todos os caminhos de dados começam alocados
 void crossbarAnycast(switchCtrlReg* ctrl){
-	int i;
+	
+	int i, rnd, datapathId;
 	int nPorts = dataplane.port_count;
 	
 	//ring buffer para armazenar portas eventualmente sem atividade
@@ -217,45 +219,50 @@ void crossbarAnycast(switchCtrlReg* ctrl){
 	
 	struct port* ports = dataplane.ports;
 	struct port* port;
-	struct ring* rx_ring;
 	
 	int i_aux;
 	struct port* port_aux;
-	struct ring* rx_ring_aux;
 	
 	for(i=0;i<nPorts;i++){
 		port = ports+i;
-		rx_ring = &(port->rx_ring);
 		if(port->datapathId==-1){
 			if(!ctrl->active[i]){//se de fato ninguém está trabalhando nela
-				if(v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
-					//se a porta tiver atividade, mas não estiver alocada
-					//busque portas alocadas mas sem atividade
-					while(true){
-						if(insertIndex==removeIndex){//idlePorts está vazio
-							//Decida se vai desalocar uma porta com atividade
-							//ou manterá como está
-							//TODO
-							break;
-						}
-						//remova o próximo item da lista
-						i_aux = idlePorts[removeIndex];
-						idlePorts[removeIndex] = -1;
-						removeIndex = (removeIndex+1)%nPorts;
-					
-						//verifique se ainda está sem atividade
-						port_aux = ports + i_aux;
-						rx_ring_aux = &(port_aux->rx_ring);
-						if(!v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
-							//se estiver, passe o caminho de dados dessa para a que está sem
+				//se a porta tiver atividade, mas não estiver alocada
+				//busque portas alocadas mas sem atividade
+				while(true){
+					if(insertIndex==removeIndex){//idlePorts está vazio
+						//Decida se vai desalocar uma porta com atividade
+						//ou manterá como está
+						rnd = rand()%100;
+						if(rnd < TOGGLE_PROBABILITY){
+							datapathId = rand()%(ctrl->nDatapaths);//encontre um datapath qualquer
+							i_aux = ctrl->suggestedPort[datapathId];
+							if(i_aux!=-1){//se já estava alocado, desaloque
+								port_aux = ports + i_aux;
+								port_aux->datapathId = -1;
+							}
+							//aloque a porta i para esse datapath
 							port->datapathId = port_aux->datapathId;
-							port_aux->datapathId = -1;
-							ctrl->suggestedPort[port->datapathId] = i;
+							ctrl->suggestedPort[datapathId] = i;
 						}
+						break;
 					}
-				}
+					//remova o próximo item da lista
+					i_aux = idlePorts[removeIndex];
+					idlePorts[removeIndex] = -1;
+					removeIndex = (removeIndex+1)%nPorts;
+				
+					//verifique se ainda está sem atividade
+					port_aux = ports + i_aux;
+					if(!ctrl->active[i]){
+						//se estiver, passe o caminho de dados dessa para a que está sem
+						port->datapathId = port_aux->datapathId;
+						port_aux->datapathId = -1;
+						ctrl->suggestedPort[port->datapathId] = i;
+					}
+				}			
 			}
-		}else if(!v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)){
+		}else if(!ctrl->active[i]){
 			//se a porta estiver alocada, porém sem atividade
 			if(idlePorts[insertIndex]==-1){//se estiver vazio
 				idlePorts[insertIndex] = i;
