@@ -7,5 +7,6 @@
 	#define MAXVAL_FORWARDINGMAP ~((unsigned int) 0) //utilizado na
 	#define UPDATE_STATS 5 //atualiza as estatísticas apenas de 5 em 5 quadros
 	#define TOGGLE_PROBABILITY 3 //% probabilidade de uma porta não alocada com atividade ser trocada por outra
-
+	#define MAX_BLIND_PROCESSING 100 //número máximo de quadros que podem ser processados sem consultar a sugestão
+	#define ALLOCATE_WHEN_INACTIVE_PROBABILITY 10//%
 #endif

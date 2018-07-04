@@ -6,7 +6,8 @@ static inline void v2_rx_user_ready(struct tpacket2_hdr *hdr){
 }
 	
 static inline int v2_rx_kernel_ready(struct tpacket2_hdr *hdr){
-    return ((hdr->tp_status & TP_STATUS_USER) == TP_STATUS_USER);}
+	return (hdr->tp_status & TP_STATUS_USER);
+}
 
 switchCtrlReg* createControlRegisters(int nDatapaths){
 	int i;
@@ -16,7 +17,6 @@ switchCtrlReg* createControlRegisters(int nDatapaths){
 	ctrl->mutex_forward_map = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*dataplane.port_count);
 	ctrl->forwardingMap = (unsigned int**)malloc(sizeof(unsigned int*)*dataplane.port_count);
 	
-	//todos começam fora do poll
 	ctrl->active = (bool*)calloc(dataplane.port_count,sizeof(bool));
 	
 	for(i=0;i<dataplane.port_count;i++){
@@ -77,7 +77,7 @@ static inline void tryToSend(switchCtrlReg* ctrl, int portNumber){
 }
 
 void* commonDataPath(void* arg){
-	int i,j;
+	int i,j, processedFrames;
 	int portNumber = -1;
 	int count = 0;
 	int ovCell;
@@ -102,10 +102,12 @@ void* commonDataPath(void* arg){
 		port = dataplane.ports+portNumber;
 		pthread_mutex_lock(&(port->mutex_allocate));
 		rx_ring = &(port->rx_ring);
+		processedFrames = 0;
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
 			//verificando se a porta não foi realocada para alguém
-			if((port->datapathId!=-1)&&(port->datapathId!=Arg->datapathId)){
-				printf("Saiu\n");
+			//ou se já não estar na hora de chegar suggestedPort novamente
+			if(((port->datapathId!=-1)&&(port->datapathId!=Arg->datapathId))
+				||(processedFrames>MAX_BLIND_PROCESSING)){
 				break;
 			}
 			//sinalizando que o datapath vai voltar à ativa
@@ -202,6 +204,7 @@ void* commonDataPath(void* arg){
 			}else{
 				count++;
 			}
+			processedFrames++;
 		}
 		//sinalizando que o datapath vai ficar inativo
 		Arg->ctrl->active[portNumber] = false;
@@ -221,60 +224,72 @@ void crossbarAnycast(switchCtrlReg* ctrl){
 	
 	//ring buffer para armazenar portas eventualmente sem atividade
 	int idlePorts[nPorts];
-	for(i=0;i<nPorts;i++)idlePorts[i]=-1;//trocar por memset
+	bool inIdlePorts[nPorts];
+	for(i=0;i<nPorts;i++){
+		idlePorts[i]=-1;//trocar por memset
+		inIdlePorts[i] = false;
+	}
 	int removeIndex = 0;
 	int insertIndex = 0;
 	
 	struct port* ports = dataplane.ports;
 	struct port* port;
+	struct ring *rx_ring;
 	
 	int i_aux;
 	struct port* port_aux;
 	
 	for(i=0;i<nPorts;i++){
 		port = ports+i;
-		if(port->datapathId==-1){
+		rx_ring = &(port->rx_ring);
+		if(port->datapathId==-1){//se não está alocada
 			if(!ctrl->active[i]){//se de fato ninguém está trabalhando nela
-				//se a porta tiver atividade, mas não estiver alocada
-				//busque portas alocadas mas sem atividade
-				while(true){
-					if(insertIndex==removeIndex){//idlePorts está vazio
-						//Decida se vai desalocar uma porta com atividade
-						//ou manterá como está
-						rnd = rand()%100;
-						if(rnd < TOGGLE_PROBABILITY){
-							datapathId = rand()%(ctrl->nDatapaths);//encontre um datapath qualquer
-							i_aux = ctrl->suggestedPort[datapathId];
-							if(i_aux!=-1){//se já estava alocado, desaloque
-								port_aux = ports + i_aux;
-								port_aux->datapathId = -1;
+				rnd = rand()%100;
+				if((v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base))
+					||(rnd < ALLOCATE_WHEN_INACTIVE_PROBABILITY)) {				
+					//busque portas alocadas mas sem atividade
+					while(true){
+						if(insertIndex==removeIndex){//idlePorts está vazio
+							//Decida se vai desalocar uma porta com atividade
+							//ou manterá como está
+							rnd = rand()%100;
+							if(rnd < TOGGLE_PROBABILITY){
+								datapathId = rand()%(ctrl->nDatapaths);//encontre um datapath qualquer
+								i_aux = ctrl->suggestedPort[datapathId];
+								if(i_aux!=-1){//se já estava alocado, desaloque
+									port_aux = ports + i_aux;
+									port_aux->datapathId = -1;
+								}
+								//aloque a porta i para esse datapath
+								port->datapathId = port_aux->datapathId;
+								ctrl->suggestedPort[datapathId] = i;
 							}
-							//aloque a porta i para esse datapath
-							port->datapathId = port_aux->datapathId;
-							ctrl->suggestedPort[datapathId] = i;
+							break;
 						}
-						break;
-					}
-					//remova o próximo item da lista
-					i_aux = idlePorts[removeIndex];
-					idlePorts[removeIndex] = -1;
-					removeIndex = (removeIndex+1)%nPorts;
+						//remova o próximo item da lista
+						i_aux = idlePorts[removeIndex];
+						idlePorts[removeIndex] = -1;
+						removeIndex = (removeIndex+1)%nPorts;
+						inIdlePorts[i_aux] = false;
 				
-					//verifique se ainda está sem atividade
-					port_aux = ports + i_aux;
-					if(!ctrl->active[i]){
-						//se estiver, passe o caminho de dados dessa para a que está sem
-						port->datapathId = port_aux->datapathId;
-						port_aux->datapathId = -1;
-						ctrl->suggestedPort[port->datapathId] = i;
-					}
-				}			
+						//verifique se ainda está sem atividade
+						port_aux = ports + i_aux;
+						if(!ctrl->active[i_aux]){
+							//se estiver, passe o caminho de dados dessa para a que está sem
+							port->datapathId = port_aux->datapathId;
+							port_aux->datapathId = -1;
+							ctrl->suggestedPort[port->datapathId] = i;
+						}
+					}			
+				}
 			}
 		}else if(!ctrl->active[i]){
 			//se a porta estiver alocada, porém sem atividade
-			if(idlePorts[insertIndex]==-1){//se estiver vazio
+			if((idlePorts[insertIndex]==-1)&&(!inIdlePorts[i])){
+				//se estiver vazio e a porta já não estiver inserida
 				idlePorts[insertIndex] = i;
 				insertIndex = (insertIndex+1)%nPorts;
+				inIdlePorts[i] = true;
 			}
 		}
 			
