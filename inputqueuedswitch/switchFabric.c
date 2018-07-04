@@ -35,6 +35,11 @@ switchCtrlReg* createControlRegisters(int nDatapaths){
 	}
 	ctrl->nDatapaths = nDatapaths;
 	
+	#if TOGGLE_WAY
+		ctrl->count1=0;
+		ctrl->count2=0;
+	#endif
+	
 	return ctrl;
 }
 
@@ -103,7 +108,14 @@ void* commonDataPath(void* arg){
 		pthread_mutex_lock(&(port->mutex_allocate));
 		rx_ring = &(port->rx_ring);
 		processedFrames = 0;
+		
 		while (v2_rx_kernel_ready(rx_ring->rd[rx_ring->frame_num].iov_base)) {
+			//PARA GERAÇÃO DE RESULTADOS
+			#if USAGE_TIME
+				struct timespec antes,depois;
+				clock_gettime(CLOCK_MONOTONIC,&antes);
+			#endif
+			/////////////////////////
 			//verificando se a porta não foi realocada para alguém
 			//ou se já não estar na hora de chegar suggestedPort novamente
 			if(((port->datapathId!=-1)&&(port->datapathId!=Arg->datapathId))
@@ -125,6 +137,10 @@ void* commonDataPath(void* arg){
 				eBPFEngine = *(Arg->ubpf_fn[port->partitionId]);
 				ret = eBPFEngine(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr));
 				transmit(metadatahdr, ppd.v2->tp_h.tp_len + sizeof(struct metadatahdr), (uint32_t)ret, 0);
+			}else{
+				#if USAGE_TIME
+				clock_gettime(CLOCK_MONOTONIC,&(Arg->ctrl->antes));
+				#endif
 			}
 			
 			v2_rx_user_ready(ppd.raw);//esse slot já pode ser preenchido com um novo quadro
@@ -205,6 +221,14 @@ void* commonDataPath(void* arg){
 				count++;
 			}
 			processedFrames++;
+			//PARA GERAÇÃO DE RESULTADOS
+			#if USAGE_TIME
+				clock_gettime(CLOCK_MONOTONIC,&depois);
+				double dt = depois.tv_sec - antes.tv_sec;
+				dt += (depois.tv_nsec - antes.tv_nsec)/1000000000.0;
+				*(Arg->tempo) += dt;
+			#endif
+			////////////////////
 		}
 		//sinalizando que o datapath vai ficar inativo
 		Arg->ctrl->active[portNumber] = false;
@@ -260,6 +284,9 @@ void crossbarAnycast(switchCtrlReg* ctrl){
 									port_aux = ports + i_aux;
 									port_aux->datapathId = -1;
 								}
+								#if TOGGLE_WAY
+									ctrl->count2++;
+								#endif
 								//aloque a porta i para esse datapath
 								port->datapathId = port_aux->datapathId;
 								ctrl->suggestedPort[datapathId] = i;
@@ -276,6 +303,9 @@ void crossbarAnycast(switchCtrlReg* ctrl){
 						port_aux = ports + i_aux;
 						if(!ctrl->active[i_aux]){
 							//se estiver, passe o caminho de dados dessa para a que está sem
+							#if TOGGLE_WAY
+								ctrl->count1++;
+							#endif
 							port->datapathId = port_aux->datapathId;
 							port_aux->datapathId = -1;
 							ctrl->suggestedPort[port->datapathId] = i;

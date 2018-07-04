@@ -119,7 +119,7 @@ int main(int argc, char **argv){
     dataplane.ports = calloc(dataplane.port_count, sizeof(struct port));
     //ISSO AQUI É PROVISÓRIO!!!!!!
     int nPartitions = 4;
-    int totalNDataPath = 3;
+    int totalNDataPath = 4;
     dataplane.ports[0].partitionId = 0;
     dataplane.ports[1].partitionId = 1;
     dataplane.ports[2].partitionId = 2;
@@ -164,14 +164,22 @@ int main(int argc, char **argv){
 	pthread_t tid[totalNDataPath];
 	
     switchCtrlReg* ctrl = createControlRegisters(totalNDataPath);
-
+	//GERAÇÃO DE RESULTADOS///////////
+	#if USAGE_TIME
+		double tempos[totalNDataPath];
+	#endif
+	////////////
 	for (i = 0; i < totalNDataPath; i++) {
 		//preenchendo os campos da estrutura commonPathArg correspondente
 		//a essa thread
         cArg[i].ctrl = ctrl;
         cArg[i].datapathId = i;
 		cArg[i].ubpf_fn = ubpf_fn;//ponteiro das funções do agente eBPF (de cada agente)
-		
+		//GERAÇÃO DE RESULTADOS///////////
+		#if USAGE_TIME
+			cArg[i].tempo = tempos+i;tempos[i]=0;
+		#endif
+		/////////////
 		if(pthread_create(&(tid[i]), NULL, commonDataPath,&cArg[i])){
 			printf("Error while creating a datapath.\n");
 		}else{
@@ -187,9 +195,46 @@ int main(int argc, char **argv){
 		ctrl->suggestedPort[i] = i;
 		dataplane.ports[i].datapathId = i;
 	}
-	
+	//GERAÇÃO DE RESULTADOS///////////
+	#if USAGE_TIME
+		struct timespec depois;
+		clock_gettime(CLOCK_MONOTONIC,&(ctrl->antes));
+		int count1 = 0;
+	#endif
+	#if TOGGLE_WAY
+		int count2 = 0;
+	#endif
+	//////////////////////////
 	while (likely(!sigint)) {
 		crossbarAnycast(ctrl);//determina quais portas serão processadas por quais caminhos de dados
+		//GERAÇÃO DE RESULTADOS///////////
+		#if USAGE_TIME
+			if(count1==200){
+				count1 = 0;
+				clock_gettime(CLOCK_MONOTONIC,&depois);
+				double dt = depois.tv_sec - ctrl->antes.tv_sec;
+				dt += (depois.tv_nsec - ctrl->antes.tv_nsec)/1000000000.0;
+				FILE* output = fopen("outUSAGETIME.txt","a");
+				for (i = 0; i < totalNDataPath; i++) {
+					fprintf(output,"Utilization ratio: %f\n",tempos[i]/dt);
+				}
+				fprintf(output,"\n");
+				fclose(output);
+			}else{
+				count1++;
+			}
+		#endif
+		#if TOGGLE_WAY
+			if(count2==200){
+				count2 = 0;
+				FILE* output = fopen("outTOGGLEWAY.txt","a");
+				fprintf(output,"#1: %lld \n #2: %lld\n",ctrl->count1,ctrl->count2);
+				fclose(output);
+			}else{
+				count2++;
+			}
+		#endif
+		/////////////////
 	}
 	
 	for (i = 0; i < totalNDataPath; i++) {

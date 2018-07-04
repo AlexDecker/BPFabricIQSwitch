@@ -22,6 +22,13 @@
 			//porta correspondente está ativa
 			int* suggestedPort;//indica qual deve ser a próxima porta para cada caminho de dados
 			int nDatapaths;//número de caminhos de dados
+			#if TOGGLE_WAY
+			long long int count1;
+			long long int count2;
+			#endif
+			#if USAGE_TIME
+			struct timespec antes;
+			#endif
 	}switchCtrlReg;
 
 	switchCtrlReg* createControlRegisters(int nDatapaths);
@@ -32,6 +39,9 @@
         	switchCtrlReg* ctrl;//dá acesso ao registro de controle
 	        int datapathId;//identificador do caminho de dados
 			ubpf_jit_fn* ubpf_fn;//ponteiro do ponteiro da função do agente eBPF
+			///GERAÇÃO DE RESULTADOS
+			double* tempo;
+			////
 	}commonPathArg;
 
 	void* commonDataPath(void* arg);
